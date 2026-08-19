@@ -43,6 +43,10 @@ FAST_MODEL = _env("FAST_MODEL", CHAT_MODEL)
 VISION_MODEL = _env("VISION_MODEL", CHAT_MODEL)
 EMBEDDING_MODEL = _env("EMBEDDING_MODEL", "text-embedding-3-large")
 REQUEST_TIMEOUT = _env_float("REQUEST_TIMEOUT", 180.0)
+# بردارسازیِ یک سوال باید سریع باشد؛ اگر کند شد بهتر است زود به جستجوی
+# کلیدواژه‌ای برگردیم تا کاربر پشت یک درخواستِ گیرکرده منتظر نماند.
+EMBED_TIMEOUT = _env_float("EMBED_TIMEOUT", 25.0)
+EMBED_RETRIES = _env_int("EMBED_RETRIES", 2)
 
 # ------------------------------------------------------------------
 # مسیرها

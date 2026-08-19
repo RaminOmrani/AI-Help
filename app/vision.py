@@ -127,7 +127,7 @@ async def _read_page(
                 max_tokens=4000,
             )
         except Exception as exc:  # noqa: BLE001
-            print(f"[vision] صفحه‌ی {index + 1} خوانده نشد: {exc}")
+            print(f"[vision] صفحه‌ی {index + 1} خوانده نشد → {avalai.describe(exc)}")
             return raw_text
 
     result = re.sub(r"^```[a-zA-Z]*\n|\n```$", "", result.strip())

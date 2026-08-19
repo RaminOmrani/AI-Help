@@ -57,7 +57,7 @@ async def repair_page(text: str, semaphore: asyncio.Semaphore) -> str:
                 max_tokens=4000,
             )
         except Exception as exc:  # noqa: BLE001
-            print(f"[repair] صفحه بازسازی نشد: {exc}")
+            print(f"[repair] صفحه بازسازی نشد → {avalai.describe(exc)}")
             return text
     result = re.sub(r"^```[a-zA-Z]*\n|\n```$", "", result.strip())
     # اگر مدل متن را قیچی کرده باشد، به نسخه‌ی خام برمی‌گردیم

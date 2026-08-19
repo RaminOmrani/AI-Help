@@ -73,7 +73,14 @@ async def answer_stream(
             public_sources.append({"title": s["title"], "id": s["id"]})
         yield _sse({"type": "sources", "sources": public_sources, "grounded": grounded})
     else:
-        yield _sse({"type": "sources", "sources": sources, "grounded": grounded})
+        status = rag.semantic_status()
+        yield _sse({
+            "type": "sources",
+            "sources": sources,
+            "grounded": grounded,
+            "degraded": not status["ok"],
+            "degraded_reason": status["reason"],
+        })
 
     system = prompts.customer_system() if audience == "public" else prompts.agent_system()
     context = rag.build_context(hits)

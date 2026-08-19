@@ -346,7 +346,7 @@ async function ask(text) {
     client_id: store.client,
     length: store.length,
   }, {
-    sources: (e) => { sources = e.sources || []; renderSources(sources, e.grounded); },
+    sources: (e) => { sources = e.sources || []; renderSources(sources, e.grounded, e); },
     delta: (e) => {
       if (first) { body.innerHTML = ''; first = false; }
       answer += e.text;
@@ -416,13 +416,21 @@ function sourceCard(s) {
     </div>`;
 }
 
-function renderSources(sources, grounded) {
+function renderSources(sources, grounded, meta = {}) {
   const panel = $('#pSources');
+  const warning = meta.degraded
+    ? `<div class="source" style="border-color:color-mix(in srgb,var(--warn) 45%,transparent)">
+         <h5>⚠️ جستجوی معنایی کار نکرد</h5>
+         <p style="-webkit-line-clamp:unset">${escapeHtml(meta.degraded_reason || '')}<br>
+         این پاسخ فقط با جستجوی کلیدواژه‌ای ساخته شده و ممکن است دقیق نباشد.</p>
+       </div>`
+    : '';
   if (!sources.length) {
-    panel.innerHTML = `<p class="muted tiny">${grounded === false ? 'برای این سوال چیزی در مستندات پیدا نشد.' : '—'}</p>`;
+    panel.innerHTML = warning +
+      `<p class="muted tiny">${grounded === false ? 'برای این سوال چیزی در مستندات پیدا نشد.' : '—'}</p>`;
     return;
   }
-  panel.innerHTML = sources.map(sourceCard).join('');
+  panel.innerHTML = warning + sources.map(sourceCard).join('');
   panel.querySelectorAll('.source p').forEach((p) =>
     p.addEventListener('click', () => p.classList.toggle('open'))
   );

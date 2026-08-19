@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, AsyncIterator
 
@@ -30,6 +31,25 @@ def _headers() -> dict[str, str]:
     }
 
 
+def describe(exc: BaseException | None) -> str:
+    """پیام خوانا برای خطاهایی که گاهی متن خالی دارند (مثل تایم‌اوت)."""
+    if exc is None:
+        return "خطای نامشخص"
+    name = type(exc).__name__
+    text = str(exc).strip()
+    friendly = {
+        "ReadTimeout": "پاسخ سرویس در زمان مقرر نرسید (تایم‌اوت)",
+        "ConnectTimeout": "اتصال به سرویس برقرار نشد (تایم‌اوت اتصال)",
+        "ConnectError": "اتصال به سرویس ممکن نشد — اینترنت یا فیلترینگ را بررسی کنید",
+        "ReadError": "ارتباط وسط کار قطع شد",
+        "RemoteProtocolError": "سرویس ارتباط را نیمه‌کاره بست",
+        "PoolTimeout": "صف درخواست‌ها پر شد",
+    }.get(name)
+    if friendly:
+        return f"{friendly} [{name}]"
+    return f"{name}: {text}" if text else name
+
+
 def _friendly(status: int, body: str) -> str:
     detail = body.strip()
     try:
@@ -49,7 +69,8 @@ def _friendly(status: int, body: str) -> str:
     if status == 429:
         return f"تعداد درخواست‌ها بیش از حد مجاز است، کمی بعد دوباره تلاش کنید. {detail}"
     if status == 404:
-        return f"مدل یا اندپوینت پیدا نشد ({status}). نام مدل را در .env بررسی کنید. {detail}"
+        return (f"مدل یا اندپوینت پیدا نشد ({status}). نام مدل را در پنل مدیریت ← "
+                f"«کلید و مدل‌ها» بررسی کنید. {detail}")
     return f"خطای سرویس AvalAI ({status}): {detail}"
 
 
@@ -127,18 +148,39 @@ async def chat(
 # ------------------------------------------------------------------
 # امبدینگ
 # ------------------------------------------------------------------
-async def embed(texts: list[str], *, model: str | None = None) -> list[list[float]]:
+async def embed(
+    texts: list[str],
+    *,
+    model: str | None = None,
+    timeout: float | None = None,
+) -> list[list[float]]:
+    """بردارسازی با تلاش دوباره در صورت قطعی موقتِ شبکه."""
     if not texts:
         return []
+
     payload = {"model": model or settings.embedding_model(), "input": texts}
     url = f"{config.AVALAI_BASE_URL}/embeddings"
-    async with httpx.AsyncClient(timeout=config.REQUEST_TIMEOUT) as client:
-        resp = await client.post(url, headers=_headers(), json=payload)
-        if resp.status_code >= 400:
-            raise AvalAIError(_friendly(resp.status_code, resp.text))
-        data = resp.json()
-    items = sorted(data.get("data", []), key=lambda d: d.get("index", 0))
-    return [item["embedding"] for item in items]
+    limit = timeout or config.EMBED_TIMEOUT
+    last: Exception | None = None
+
+    for attempt in range(max(config.EMBED_RETRIES, 1)):
+        try:
+            async with httpx.AsyncClient(timeout=limit) as client:
+                resp = await client.post(url, headers=_headers(), json=payload)
+            if resp.status_code >= 400:
+                # خطای سرویس (کلید، مدل، اعتبار) با تلاش دوباره درست نمی‌شود
+                raise AvalAIError(_friendly(resp.status_code, resp.text))
+            data = resp.json()
+            items = sorted(data.get("data", []), key=lambda d: d.get("index", 0))
+            return [item["embedding"] for item in items]
+        except AvalAIError:
+            raise
+        except httpx.HTTPError as exc:
+            last = exc
+            if attempt + 1 < config.EMBED_RETRIES:
+                await asyncio.sleep(1.5 * (attempt + 1))
+
+    raise AvalAIError(describe(last) if last else "بردارسازی ناموفق بود.")
 
 
 # ------------------------------------------------------------------

@@ -20,6 +20,14 @@ from .textutils import normalize, snippet, tokens
 _index_lock = threading.Lock()
 _cache: dict[str, object] = {"version": None, "rows": None, "matrix": None, "df": None}
 
+# آخرین وضعیت جستجوی معنایی — برای اینکه افت کیفیت بی‌صدا نماند
+_semantic: dict[str, object] = {"ok": True, "reason": ""}
+
+
+def semantic_status() -> dict:
+    """آیا جستجوی برداری در آخرین درخواست کار کرد؟"""
+    return dict(_semantic)
+
 
 # ------------------------------------------------------------------
 # ایندکس‌گذاری
@@ -153,7 +161,7 @@ async def _embed_document(doc_id: int) -> bool:
                 ],
             )
     except Exception as exc:  # noqa: BLE001
-        print(f"[rag] بردارسازی ناموفق بود: {exc}")
+        print(f"[rag] بردارسازی ناموفق بود → {avalai.describe(exc)}")
         return False
     return True
 
@@ -322,8 +330,14 @@ async def search(
                 if q.size == matrix.shape[1]:
                     q = q / (np.linalg.norm(q) or 1.0)
                     semantic = matrix @ q
+            _semantic.update(ok=True, reason="")
         except Exception as exc:  # noqa: BLE001
-            print(f"[rag] جستجوی معنایی در دسترس نیست: {exc}")
+            reason = avalai.describe(exc)
+            _semantic.update(ok=False, reason=reason)
+            print(
+                f"[rag] جستجوی معنایی در دسترس نیست → {reason}"
+                "  (فعلاً فقط جستجوی کلیدواژه‌ای — کیفیت پاسخ پایین‌تر می‌آید)"
+            )
 
     lex_norm = lexical / (lexical.max() or 1.0)
     sem_norm = np.clip(semantic, 0, None)
