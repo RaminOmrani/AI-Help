@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>دستیار هوشمند پشتیبانی</title>
+<meta name="description" content="پاسخ سریع به سوال‌های شما درباره‌ی نرم‌افزار، بر پایه‌ی راهنماهای رسمی">
+<link rel="stylesheet" href="/assets/base.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+<style>
+  body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+
+  /* ---------- نوار بالا ---------- */
+  header.topbar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 14px clamp(14px, 4vw, 34px);
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--panel-solid) 72%, transparent);
+    backdrop-filter: blur(16px);
+    flex: none; z-index: 20;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+  .brand .orb { width: 40px; height: 40px; font-size: 40px; }
+  .brand b { font-size: 15.5px; display: block; line-height: 1.4; white-space: nowrap; }
+  .brand span { font-size: 11.5px; }
+  .topbar .spacer { flex: 1; }
+  .icon-btn {
+    width: 38px; height: 38px; border-radius: 12px;
+    display: grid; place-items: center; font-size: 16px;
+    border: 1px solid var(--border); background: var(--panel-solid);
+    transition: transform .16s, box-shadow .16s;
+  }
+  .icon-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+
+  /* ---------- ناحیه‌ی گفتگو ---------- */
+  main { flex: 1; overflow-y: auto; scroll-behavior: smooth; }
+  .stream { max-width: 840px; margin: 0 auto; padding: 26px clamp(14px, 4vw, 24px) 26px; }
+
+  /* ---------- صفحه‌ی خوش‌آمد ---------- */
+  .hero { text-align: center; padding: clamp(18px, 6vh, 54px) 6px 12px; animation: rise .5s cubic-bezier(.2,.9,.3,1); }
+  .hero .orb { width: 96px; height: 96px; font-size: 96px; margin: 0 auto 22px; }
+  .hero h1 {
+    font-size: clamp(23px, 5vw, 33px); font-weight: 800; margin: 0 0 10px; letter-spacing: -.4px;
+    background: linear-gradient(115deg, var(--brand-deep), var(--brand) 55%, var(--accent));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero p { margin: 0 auto; max-width: 480px; color: var(--muted); font-size: 14.5px; }
+  @keyframes rise { from { opacity: 0; transform: translateY(16px); } }
+
+  .chips { display: grid; gap: 11px; grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 620px; margin: 30px auto 0; }
+  .chip {
+    text-align: right; padding: 15px 17px; border-radius: 17px;
+    background: var(--panel); border: 1px solid var(--border);
+    backdrop-filter: blur(14px); font-size: 13.5px; font-weight: 500; line-height: 1.7;
+    display: flex; align-items: center; gap: 11px;
+    transition: transform .18s cubic-bezier(.2,.9,.3,1.4), border-color .18s, box-shadow .18s;
+  }
+  .chip:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--brand) 42%, transparent); box-shadow: var(--shadow-sm); }
+  .chip i { font-style: normal; font-size: 18px; flex: none; }
+
+  /* ---------- پیام‌ها ---------- */
+  .msg { display: flex; gap: 12px; margin-bottom: 22px; animation: rise .34s cubic-bezier(.2,.9,.3,1); }
+  .msg .orb { width: 34px; height: 34px; font-size: 34px; margin-top: 3px; }
+  .msg.user { flex-direction: row-reverse; }
+  .bubble {
+    padding: 13px 17px; border-radius: 20px; max-width: min(88%, 660px);
+    font-size: 14.5px; box-shadow: var(--shadow-sm);
+  }
+  .msg.bot  .bubble { background: var(--panel-solid); border: 1px solid var(--border); border-start-end-radius: 7px; }
+  .msg.user .bubble {
+    background: linear-gradient(135deg, var(--brand), var(--brand-deep));
+    color: var(--on-brand); border-start-start-radius: 7px;
+    box-shadow: 0 8px 20px -12px color-mix(in srgb, var(--brand) 65%, transparent);
+  }
+  .msg.user .bubble .md strong { color: var(--on-brand); }
+
+  .caret::after {
+    content: ''; display: inline-block; width: 2px; height: 1em;
+    background: var(--brand); vertical-align: -2px; margin-inline-start: 3px;
+    animation: blink .9s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .thinking { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 13px; }
+  .thinking .dots { display: inline-flex; gap: 4px; }
+  .thinking .dots i {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--brand);
+    animation: bounce 1.15s ease-in-out infinite;
+  }
+  .thinking .dots i:nth-child(2) { animation-delay: .16s; }
+  .thinking .dots i:nth-child(3) { animation-delay: .32s; }
+  @keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-5px); opacity: 1; } }
+
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 9px; }
+  .meta button {
+    font-size: 12px; color: var(--muted); padding: 4px 9px; border-radius: 9px;
+    border: 1px solid transparent; transition: background .15s, color .15s;
+  }
+  .meta button:hover { background: color-mix(in srgb, var(--brand) 10%, transparent); color: var(--brand); }
+  .meta button.active { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+  .src { font-size: 11.5px; }
+
+  /* ---------- نوار نوشتن ---------- */
+  footer.composer {
+    flex: none; padding: 12px clamp(14px, 4vw, 24px) calc(14px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--bg) 62%, transparent);
+  }
+  .composer-inner { max-width: 840px; margin: 0 auto; }
+  .input-row {
+    display: flex; align-items: flex-end; gap: 8px; padding: 7px 7px 7px 7px;
+    background: var(--panel-solid); border: 1px solid var(--border);
+    border-radius: 26px; box-shadow: var(--shadow);
+    transition: border-color .18s, box-shadow .18s;
+  }
+  .input-row:focus-within {
+    border-color: color-mix(in srgb, var(--brand) 55%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 12%, transparent), var(--shadow);
+  }
+  #q {
+    flex: 1; border: none; outline: none; background: none; resize: none;
+    max-height: 148px; min-height: 26px; padding: 9px 12px; font-size: 14.5px; line-height: 1.75;
+  }
+  .send {
+    width: 42px; height: 42px; border-radius: 50%; flex: none;
+    background: linear-gradient(135deg, var(--brand), var(--brand-deep)); color: var(--on-brand);
+    display: grid; place-items: center; font-size: 17px;
+    box-shadow: 0 6px 16px -9px color-mix(in srgb, var(--brand) 60%, transparent);
+    transition: transform .16s, opacity .16s;
+  }
+  .send:hover:not(:disabled) { transform: scale(1.07); }
+  .send:disabled { opacity: .4; cursor: not-allowed; }
+  .mic { width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 16px; color: var(--muted); }
+  .mic:hover { color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); }
+  .mic.rec { color: var(--danger); animation: breathe 1.1s ease-in-out infinite; }
+  .hint { text-align: center; font-size: 11px; color: var(--muted); margin-top: 9px; }
+  .len-row { display: flex; align-items: center; gap: 7px; margin: 0 4px 9px; }
+
+  .banner {
+    max-width: 840px; margin: 0 auto 14px; padding: 12px 16px; border-radius: 14px; font-size: 13px;
+    background: color-mix(in srgb, var(--warn) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); color: var(--warn);
+  }
+
+  @media (max-width: 560px) {
+    .brand span { display: none; }
+    .bubble { max-width: 100%; font-size: 14px; }
+    .chips { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="aurora"><span></span><span></span><span></span></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="orb" id="brandOrb" data-face="🤖"></div>
+    <div>
+      <b id="brandName">دستیار هوشمند</b>
+      <span class="muted" id="brandSub">همیشه بیدار، همیشه پاسخگو</span>
+    </div>
+  </div>
+  <div class="spacer"></div>
+  <button class="icon-btn" id="histBtn" title="گفتگوهای قبلی">🕘</button>
+  <button class="icon-btn" id="themeBtn" title="تغییر تم">🌙</button>
+  <button class="icon-btn" id="newBtn" title="گفتگوی جدید">✨</button>
+  <button class="btn btn-sm" id="humanBtn">👤 کارشناس انسانی</button>
+</header>
+
+<main id="main">
+  <div class="stream" id="stream">
+    <section class="hero" id="hero">
+      <div class="orb" data-face="🤖"></div>
+      <h1 id="heroTitle">سلام! چطور می‌تونم کمکت کنم؟</h1>
+      <p id="heroSub">هر سوالی درباره‌ی نرم‌افزار داری بپرس — جواب رو از توی راهنماهای رسمی برات پیدا می‌کنم.</p>
+      <div class="chips" id="chips"></div>
+    </section>
+  </div>
+</main>
+
+<footer class="composer">
+  <div class="composer-inner">
+    <div id="banner"></div>
+    <div class="len-row">
+      <span class="seg-label">طول پاسخ:</span>
+      <div id="lenPick"></div>
+    </div>
+    <div class="input-row">
+      <button class="mic" id="micBtn" title="پرسش صوتی">🎙️</button>
+      <textarea id="q" rows="1" placeholder="سوالت رو اینجا بنویس…" autocomplete="off"></textarea>
+      <button class="send" id="sendBtn" title="ارسال (Enter)" disabled>↑</button>
+    </div>
+    <div class="hint">پاسخ‌ها بر پایه‌ی راهنماهای رسمی ساخته می‌شوند. برای موارد حساس با کارشناس تماس بگیرید.</div>
+  </div>
+</footer>
+
+<script type="module">
+import { $, md, api, toast, store, streamChat, initTheme, copyText, escapeHtml, openHistoryDrawer,
+         mountLengthPicker } from '/assets/core.js';
+
+const stream = $('#stream');
+const heroTemplate = $('#hero').cloneNode(true);
+const input  = $('#q');
+const sendBtn = $('#sendBtn');
+let busy = false;
+let info = {};
+
+initTheme('#themeBtn');
+
+/* ---------- راه‌اندازی ---------- */
+try {
+  info = await api('/api/bootstrap');
+  $('#brandName').textContent = `دستیار ${info.assistant || 'هوشمند'}`;
+  $('#brandSub').textContent  = info.product || '';
+  document.title = `دستیار هوشمند ${info.brand || ''}`.trim();
+  if (info.welcome) $('#heroSub').textContent = info.welcome;
+  renderChips(info.suggestions || []);
+  if (!info.ready) {
+    $('#banner').innerHTML =
+      '<div class="banner">⚠️ هنوز هیچ راهنمایی در سیستم ثبت نشده. مدیر باید از پنل مدیریت فایل‌های راهنما را بارگذاری کند.</div>';
+  }
+} catch {
+  $('#banner').innerHTML = '<div class="banner">⚠️ ارتباط با سرور برقرار نشد.</div>';
+}
+
+function renderChips(list) {
+  const icons = ['💡', '🧾', '⚙️', '🔐', '📦', '📊'];
+  $('#chips').innerHTML = list
+    .slice(0, 4)
+    .map((s, i) => `<button class="chip" data-q="${escapeHtml(s)}"><i>${icons[i % icons.length]}</i><span>${escapeHtml(s)}</span></button>`)
+    .join('');
+  $('#chips').querySelectorAll('.chip').forEach((c) =>
+    c.addEventListener('click', () => ask(c.dataset.q))
+  );
+}
+
+/* ---------- ساخت پیام ---------- */
+function addMessage(role, html) {
+  $('#hero')?.remove();
+  const el = document.createElement('div');
+  el.className = `msg ${role}`;
+  el.innerHTML =
+    (role === 'bot' ? '<div class="orb" data-face="🤖"></div>' : '') +
+    `<div class="bubble"><div class="md">${html}</div><div class="meta" hidden></div></div>`;
+  stream.appendChild(el);
+  scroll();
+  return el;
+}
+
+const scroll = () => { $('#main').scrollTop = $('#main').scrollHeight; };
+
+/* ---------- پرسیدن ---------- */
+async function ask(text) {
+  const question = (text ?? input.value).trim();
+  if (!question || busy) return;
+
+  busy = true;
+  input.value = '';
+  autoGrow();
+  sendBtn.disabled = true;
+
+  addMessage('user', md(question));
+
+  const botEl = addMessage('bot', '<div class="thinking"><span class="dots"><i></i><i></i><i></i></span> دارم توی راهنماها می‌گردم…</div>');
+  const orb = botEl.querySelector('.orb');
+  const body = botEl.querySelector('.md');
+  const meta = botEl.querySelector('.meta');
+  orb.classList.add('thinking');
+
+  let answer = '';
+  let first = true;
+  let sources = [];
+
+  await streamChat('/api/chat', {
+    message: question,
+    session_id: store.session,
+    client_id: store.client,
+    length: store.length,
+  }, {
+    sources: (e) => { sources = e.sources || []; },
+    delta: (e) => {
+      if (first) { body.innerHTML = ''; first = false; }
+      answer += e.text;
+      body.innerHTML = md(answer);
+      body.classList.add('caret');
+      scroll();
+    },
+    error: (e) => {
+      body.innerHTML = `<p style="color:var(--danger)">${escapeHtml(e.message || 'خطایی رخ داد.')}</p>`;
+    },
+    done: (e) => {
+      body.classList.remove('caret');
+      renderMeta(meta, e.message_id, answer, sources, e.grounded);
+    },
+  });
+
+  orb.classList.remove('thinking');
+  body.classList.remove('caret');
+  busy = false;
+  sendBtn.disabled = !input.value.trim();
+  input.focus();
+}
+
+function renderMeta(meta, messageId, answer, sources, grounded) {
+  meta.hidden = false;
+  const names = [...new Set(sources.map((s) => s.title))].slice(0, 2);
+  meta.innerHTML =
+    (names.length ? `<span class="pill src">📘 ${escapeHtml(names.join('، '))}</span>` : '') +
+    (grounded === false ? '<span class="pill pill-warn src">در راهنماها پیدا نشد</span>' : '') +
+    '<span style="flex:1"></span>' +
+    '<button data-act="copy">کپی</button>' +
+    '<button data-act="up">👍</button>' +
+    '<button data-act="down">👎</button>';
+
+  meta.querySelector('[data-act="copy"]').onclick = () => copyText(answer);
+  for (const [act, value] of [['up', 1], ['down', -1]]) {
+    meta.querySelector(`[data-act="${act}"]`).onclick = (ev) => {
+      if (!messageId) return;
+      api('/api/feedback', { method: 'POST', body: { message_id: messageId, value } }).catch(() => {});
+      meta.querySelectorAll('[data-act="up"],[data-act="down"]').forEach((b) => b.classList.remove('active'));
+      ev.currentTarget.classList.add('active');
+      if (value < 0) toast('ممنون! این مورد را به تیم پشتیبانی گزارش دادیم.', 'ok');
+    };
+  }
+}
+
+/* ---------- ورودی ---------- */
+function autoGrow() {
+  input.style.height = 'auto';
+  input.style.height = `${Math.min(input.scrollHeight, 148)}px`;
+}
+input.addEventListener('input', () => { autoGrow(); sendBtn.disabled = !input.value.trim() || busy; });
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
+});
+sendBtn.addEventListener('click', () => ask());
+
+/* ---------- سابقه‌ی گفتگو ---------- */
+async function restoreConversation() {
+  let messages = [];
+  try {
+    messages = (await api(`/api/history?session_id=${encodeURIComponent(store.session)}`)).messages;
+  } catch { return; }
+  if (!messages.length) return;
+
+  $('#hero')?.remove();
+  for (const m of messages) {
+    const el = addMessage(m.role === 'user' ? 'user' : 'bot', md(m.content));
+    if (m.role !== 'assistant') continue;
+    const meta = el.querySelector('.meta');
+    renderMeta(meta, m.id, m.content, m.sources || [], m.grounded);
+    if (m.feedback) {
+      const act = m.feedback > 0 ? 'up' : 'down';
+      meta.querySelector(`[data-act="${act}"]`)?.classList.add('active');
+    }
+  }
+  scroll();
+}
+
+function startFresh() {
+  store.newSession();
+  stream.replaceChildren(heroTemplate.cloneNode(true));
+  renderChips(info.suggestions || []);
+  input.focus();
+}
+
+async function openConversation(sessionId) {
+  store.useSession(sessionId);
+  stream.replaceChildren();
+  await restoreConversation();
+  if (!stream.children.length) startFresh();
+}
+
+$('#newBtn').addEventListener('click', startFresh);
+
+$('#histBtn').addEventListener('click', () =>
+  openHistoryDrawer({
+    load: async () =>
+      (await api(`/api/conversations?client_id=${encodeURIComponent(store.client)}`)).conversations,
+    open: openConversation,
+    remove: (sessionId) =>
+      api(`/api/conversations/${encodeURIComponent(sessionId)}?client_id=${encodeURIComponent(store.client)}`,
+          { method: 'DELETE' }),
+    fresh: startFresh,
+  })
+);
+
+mountLengthPicker($('#lenPick'));
+await restoreConversation();
+
+/* ---------- ورودی صوتی ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const micBtn = $('#micBtn');
+if (SR) {
+  const rec = new SR();
+  rec.lang = 'fa-IR';
+  rec.interimResults = true;
+  let listening = false;
+
+  micBtn.addEventListener('click', () => {
+    listening ? rec.stop() : rec.start();
+  });
+  rec.onstart  = () => { listening = true;  micBtn.classList.add('rec'); };
+  rec.onend    = () => { listening = false; micBtn.classList.remove('rec'); };
+  rec.onerror  = () => toast('میکروفن در دسترس نیست.', 'err');
+  rec.onresult = (e) => {
+    input.value = [...e.results].map((r) => r[0].transcript).join('');
+    autoGrow();
+    sendBtn.disabled = !input.value.trim();
+  };
+} else {
+  micBtn.style.display = 'none';
+}
+
+/* ---------- ارتباط با کارشناس ---------- */
+$('#humanBtn').addEventListener('click', () => {
+  const back = document.createElement('div');
+  back.className = 'modal-backdrop';
+  back.innerHTML = `
+    <div class="modal">
+      <h3 style="margin:0 0 6px">ارتباط با کارشناس پشتیبانی</h3>
+      <p class="muted tiny" style="margin:0 0 18px">
+        فرم را پر کنید؛ همکاران ما تماس می‌گیرند.
+        ${info.support_phone ? `تلفن: <b>${escapeHtml(info.support_phone)}</b> —` : ''}
+        ${escapeHtml(info.support_hours || '')}
+      </p>
+      <div style="display:grid;gap:11px">
+        <input class="field" id="tName" placeholder="نام و نام خانوادگی">
+        <input class="field" id="tContact" placeholder="شماره تماس یا ایمیل">
+        <textarea class="field" id="tBody" rows="4" placeholder="مشکل یا سوال شما…"></textarea>
+      </div>
+      <div style="display:flex;gap:9px;margin-top:18px;justify-content:flex-start">
+        <button class="btn btn-primary" id="tSend">ثبت درخواست</button>
+        <button class="btn btn-ghost" id="tCancel">انصراف</button>
+      </div>
+    </div>`;
+  document.body.appendChild(back);
+
+  const close = () => back.remove();
+  back.addEventListener('click', (e) => { if (e.target === back) close(); });
+  back.querySelector('#tCancel').onclick = close;
+  back.querySelector('#tSend').onclick = async () => {
+    const body = back.querySelector('#tBody').value.trim();
+    if (!body) { toast('لطفاً توضیح مشکل را بنویسید.', 'err'); return; }
+    try {
+      await api('/api/ticket', {
+        method: 'POST',
+        body: {
+          name: back.querySelector('#tName').value,
+          contact: back.querySelector('#tContact').value,
+          body,
+          session_id: store.session,
+          subject: 'درخواست تماس از دستیار هوشمند',
+        },
+      });
+      close();
+      toast('درخواست شما ثبت شد ✓ به‌زودی تماس می‌گیریم.', 'ok');
+    } catch (err) {
+      toast(err.message, 'err');
+    }
+  };
+});
+
+input.focus();
+</script>
+</body>
+</html>
