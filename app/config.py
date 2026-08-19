@@ -40,7 +40,7 @@ AVALAI_CREDIT_URL = _env("AVALAI_CREDIT_URL", "https://api.avalai.ir/user/v1/cre
 
 CHAT_MODEL = _env("CHAT_MODEL", "gemini-2.5-flash")
 FAST_MODEL = _env("FAST_MODEL", CHAT_MODEL)
-EMBEDDING_MODEL = _env("EMBEDDING_MODEL", "text-embedding-3-small")
+EMBEDDING_MODEL = _env("EMBEDDING_MODEL", "text-embedding-3-large")
 REQUEST_TIMEOUT = _env_float("REQUEST_TIMEOUT", 120.0)
 
 # ------------------------------------------------------------------

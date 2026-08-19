@@ -18,6 +18,30 @@ from app import avalai, config  # noqa: E402
 OK, BAD, INFO = "✅", "❌", "•"
 
 
+# خانواده‌هایی که برای این کاربرد (پرسش‌وپاسخ فارسی روی مستندات) معنی دارند
+_FAMILIES = [
+    ("سریع و ارزان — گزینه‌ی مناسب CHAT_MODEL و FAST_MODEL",
+     ("flash", "mini", "haiku", "lite", "nano")),
+    ("قوی‌تر و گران‌تر — فقط اگر کیفیت پاسخ کافی نبود",
+     ("pro", "opus", "sonnet", "gpt-5", "gpt-4o", "gpt-4.1")),
+    ("بردارسازی — گزینه‌ی EMBEDDING_MODEL", ("embedding", "embed")),
+]
+
+
+def _print_candidates(models: list[str]) -> None:
+    """مدل‌های حساب را دسته‌بندی می‌کند تا انتخاب راحت‌تر باشد."""
+    for title, keywords in _FAMILIES:
+        matches = sorted({m for m in models if any(k in m.lower() for k in keywords)})
+        if not matches:
+            continue
+        print(f"\n   ── {title}")
+        for name in matches[:18]:
+            print(f"      {name}")
+        if len(matches) > 18:
+            print(f"      … و {len(matches) - 18} مورد دیگر")
+    print()
+
+
 async def main() -> int:
     failures = 0
     print(f"\n{INFO} آدرس سرویس: {config.AVALAI_BASE_URL}")
@@ -44,6 +68,7 @@ async def main() -> int:
     try:
         models = await avalai.list_models()
         print(f"{OK} {len(models)} مدل روی این حساب فعال است.")
+        _print_candidates(models)
     except Exception as exc:  # noqa: BLE001
         print(f"{INFO} فهرست مدل‌ها در دسترس نبود: {exc}")
 
