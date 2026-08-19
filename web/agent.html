@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>کنسول پشتیبانی</title>
+<link rel="stylesheet" href="/assets/base.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
+<style>
+  body { height: 100dvh; overflow: hidden; }
+  .app { display: grid; grid-template-rows: auto 1fr; height: 100dvh; }
+
+  header.topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px clamp(12px, 3vw, 24px);
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in srgb, var(--panel-solid) 78%, transparent);
+    backdrop-filter: blur(14px);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .orb { width: 34px; height: 34px; font-size: 34px; }
+  .brand b { font-size: 14.5px; }
+  .spacer { flex: 1; }
+  .icon-btn {
+    width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center;
+    border: 1px solid var(--border); background: var(--panel-solid); font-size: 15px;
+  }
+
+  .body { display: grid; grid-template-columns: 1fr 344px; overflow: hidden; }
+  @media (max-width: 1000px) { .body { grid-template-columns: 1fr; } aside { display: none; } }
+
+  .chatcol { display: flex; flex-direction: column; overflow: hidden; }
+  .scroll { flex: 1; overflow-y: auto; padding: 20px clamp(12px, 3vw, 26px); }
+  .inner { max-width: 800px; margin: 0 auto; }
+
+  .empty { text-align: center; padding: 8vh 10px 0; }
+  .empty .orb { width: 74px; height: 74px; font-size: 74px; margin: 0 auto 18px; }
+  .empty h2 { margin: 0 0 8px; font-size: 21px; font-weight: 700; }
+  .empty p { color: var(--muted); font-size: 13.5px; margin: 0 0 24px; }
+  .qgrid { display: grid; gap: 9px; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
+  .qgrid button {
+    text-align: right; padding: 12px 15px; border-radius: 14px; font-size: 13px;
+    background: var(--panel); border: 1px solid var(--border); line-height: 1.7;
+    transition: transform .16s, border-color .16s;
+  }
+  .qgrid button:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--brand) 45%, transparent); }
+
+  .msg { margin-bottom: 20px; animation: rise .3s ease; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+  .msg.user .row {
+    display: inline-block; max-width: 88%; padding: 11px 16px; border-radius: 16px;
+    background: linear-gradient(135deg, var(--brand), #8a5cff); color: #fff; font-size: 14px;
+    box-shadow: 0 10px 22px -14px var(--brand);
+  }
+  .msg.user { text-align: left; }
+  .msg.bot .row {
+    display: flex; gap: 11px;
+  }
+  .msg.bot .orb { width: 30px; height: 30px; font-size: 30px; margin-top: 3px; flex: none; }
+  .msg.bot .content {
+    flex: 1; min-width: 0; padding: 13px 16px; border-radius: 16px; border-start-end-radius: 6px;
+    background: var(--panel-solid); border: 1px solid var(--border); font-size: 14px;
+  }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  .actions button {
+    font-size: 12px; padding: 5px 11px; border-radius: 9px; color: var(--muted);
+    border: 1px solid var(--border); transition: color .15s, border-color .15s;
+  }
+  .actions button:hover { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 45%, transparent); }
+
+  .thinking { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+  .dots { display: inline-flex; gap: 4px; }
+  .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--brand); animation: bounce 1.15s infinite; }
+  .dots i:nth-child(2) { animation-delay: .16s; }
+  .dots i:nth-child(3) { animation-delay: .32s; }
+  @keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
+
+  .composer { flex: none; padding: 12px clamp(12px, 3vw, 26px) 16px; border-top: 1px solid var(--border); }
+  .input-row {
+    max-width: 800px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px;
+    background: var(--panel-solid); border: 1px solid var(--border); border-radius: 20px; padding: 6px 6px 6px 6px;
+  }
+  .input-row:focus-within { border-color: color-mix(in srgb, var(--brand) 55%, transparent); }
+  #q { flex: 1; border: none; outline: none; background: none; resize: none; max-height: 150px; padding: 9px 12px; font-size: 14px; line-height: 1.75; }
+  .send { width: 38px; height: 38px; border-radius: 50%; flex: none; background: linear-gradient(135deg, var(--brand), #8a5cff); color: #fff; display: grid; place-items: center; }
+  .send:disabled { opacity: .4; }
+
+  /* ---------- پنل منابع ---------- */
+  aside { border-inline-start: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; background: color-mix(in srgb, var(--panel-solid) 40%, transparent); }
+  .tabs { display: flex; gap: 4px; padding: 12px 14px 0; }
+  .tabs button {
+    flex: 1; padding: 8px; border-radius: 11px 11px 0 0; font-size: 12.5px; font-weight: 600; color: var(--muted);
+    border-bottom: 2px solid transparent;
+  }
+  .tabs button.on { color: var(--brand); border-bottom-color: var(--brand); background: color-mix(in srgb, var(--brand) 8%, transparent); }
+  .panel { flex: 1; overflow-y: auto; padding: 14px; }
+
+  .source {
+    padding: 11px 13px; border-radius: 13px; border: 1px solid var(--border);
+    background: var(--panel-solid); margin-bottom: 9px; font-size: 12.5px;
+  }
+  .source h5 { margin: 0 0 5px; font-size: 12.5px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+  .source .bar { height: 3px; border-radius: 9px; background: color-mix(in srgb, var(--muted) 22%, transparent); overflow: hidden; margin: 7px 0; }
+  .source .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-2)); }
+  .source p {
+    margin: 0; color: var(--muted); line-height: 1.85; cursor: pointer;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .source p.open { -webkit-line-clamp: unset; }
+
+  /* ---------- ورود ---------- */
+  .login { position: fixed; inset: 0; display: grid; place-items: center; z-index: 50; padding: 20px; }
+  .login .card { padding: 34px 30px; width: min(380px, 100%); text-align: center; }
+  .login .orb { width: 62px; height: 62px; font-size: 62px; margin: 0 auto 18px; }
+  .login h2 { margin: 0 0 6px; font-size: 19px; }
+  .login p { margin: 0 0 22px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="aurora"><span></span><span></span><span></span></div>
+
+<div class="login" id="login" hidden>
+  <div class="card">
+    <div class="orb" data-face="🛠️"></div>
+    <h2>کنسول پشتیبانی</h2>
+    <p class="muted">برای ورود رمز عبور کارشناس را وارد کنید.</p>
+    <input class="field" id="pw" type="password" placeholder="رمز عبور" style="text-align:center">
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;margin-top:12px">ورود</button>
+    <p class="muted tiny" style="margin:16px 0 0">پنل مدیریت: <a href="/admin">/admin</a></p>
+  </div>
+</div>
+
+<div class="app" id="app" hidden>
+  <header class="topbar">
+    <div class="brand">
+      <div class="orb" data-face="🛠️"></div>
+      <div>
+        <b>کنسول پشتیبانی</b>
+        <div class="muted tiny" id="stats">—</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="themeBtn">🌙</button>
+    <button class="btn btn-sm" id="newBtn">✨ گفتگوی جدید</button>
+    <a class="btn btn-sm btn-ghost" href="/admin">پنل مدیریت</a>
+    <button class="btn btn-sm btn-ghost" id="outBtn">خروج</button>
+  </header>
+
+  <div class="body">
+    <div class="chatcol">
+      <div class="scroll" id="scroll">
+        <div class="inner" id="stream">
+          <div class="empty" id="empty">
+            <div class="orb" data-face="🛠️"></div>
+            <h2>سوال فنی‌ات را بپرس</h2>
+            <p id="welcome">پاسخ را با ارجاع دقیق به فایل و شماره‌ی صفحه می‌دهم.</p>
+            <div class="qgrid" id="qgrid"></div>
+          </div>
+        </div>
+      </div>
+      <div class="composer">
+        <div class="input-row">
+          <textarea id="q" rows="1" placeholder="مثلاً: خطای اتصال به SQL چه دلایلی دارد؟"></textarea>
+          <button class="send" id="sendBtn" disabled>↑</button>
+        </div>
+      </div>
+    </div>
+
+    <aside>
+      <div class="tabs">
+        <button class="on" data-tab="sources">منابع پاسخ</button>
+        <button data-tab="search">جستجوی مستقیم</button>
+      </div>
+      <div class="panel" id="pSources">
+        <p class="muted tiny">بعد از هر پاسخ، تکه‌های استفاده‌شده از مستندات اینجا نمایش داده می‌شوند.</p>
+      </div>
+      <div class="panel" id="pSearch" hidden>
+        <input class="field" id="sq" placeholder="جستجو در مستندات…">
+        <div id="sres" style="margin-top:12px"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script type="module">
+import { $, $$, md, api, toast, store, streamChat, initTheme, copyText, escapeHtml, faDigits , setAuthScope } from '/assets/core.js';
+
+setAuthScope('agent');
+initTheme('#themeBtn');
+
+const login = $('#login'), app = $('#app');
+let busy = false;
+
+/* ---------- ورود ---------- */
+async function boot() {
+  if (!store.token) return showLogin();
+  try {
+    const data = await api('/api/agent/bootstrap', { auth: true });
+    login.hidden = true;
+    app.hidden = false;
+    const s = data.stats || {};
+    $('#stats').textContent =
+      `${faDigits(s.ready || 0)} سند · ${faDigits(s.pages || 0)} صفحه · مدل ${data.model || '—'}`;
+    if (data.welcome) $('#welcome').textContent = data.welcome;
+    renderSuggestions(data.suggestions || []);
+    $('#q').focus();
+  } catch {
+    showLogin();
+  }
+}
+function showLogin() { login.hidden = false; app.hidden = true; $('#pw').focus(); }
+
+$('#loginBtn').addEventListener('click', doLogin);
+$('#pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+async function doLogin() {
+  const password = $('#pw').value;
+  if (!password) return;
+  try {
+    const res = await api('/api/auth/login', { method: 'POST', body: { role: 'agent', password } });
+    store.token = res.token;
+    boot();
+  } catch (err) { toast(err.message, 'err'); }
+}
+$('#outBtn').addEventListener('click', () => { store.token = ''; location.reload(); });
+$('#newBtn').addEventListener('click', () => { store.newSession(); location.reload(); });
+
+function renderSuggestions(list) {
+  $('#qgrid').innerHTML = list
+    .map((s) => `<button data-q="${escapeHtml(s)}">${escapeHtml(s)}</button>`)
+    .join('');
+  $$('#qgrid button').forEach((b) => b.addEventListener('click', () => ask(b.dataset.q)));
+}
+
+/* ---------- گفتگو ---------- */
+const stream = $('#stream'), scrollEl = $('#scroll'), input = $('#q'), sendBtn = $('#sendBtn');
+const scroll = () => { scrollEl.scrollTop = scrollEl.scrollHeight; };
+
+function addUser(text) {
+  $('#empty')?.remove();
+  const el = document.createElement('div');
+  el.className = 'msg user';
+  el.innerHTML = `<div class="row">${escapeHtml(text)}</div>`;
+  stream.appendChild(el);
+  scroll();
+}
+
+function addBot() {
+  const el = document.createElement('div');
+  el.className = 'msg bot';
+  el.innerHTML =
+    '<div class="row"><div class="orb" data-face="🛠️"></div>' +
+    '<div class="content"><div class="md"><div class="thinking"><span class="dots"><i></i><i></i><i></i></span> در حال جستجو در مستندات…</div></div>' +
+    '<div class="actions" hidden></div></div></div>';
+  stream.appendChild(el);
+  scroll();
+  return el;
+}
+
+async function ask(text) {
+  const question = (text ?? input.value).trim();
+  if (!question || busy) return;
+  busy = true;
+  input.value = '';
+  input.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  addUser(question);
+  const botEl = addBot();
+  const orb = botEl.querySelector('.orb');
+  const body = botEl.querySelector('.md');
+  const actions = botEl.querySelector('.actions');
+  orb.classList.add('thinking');
+
+  let answer = '', first = true, sources = [];
+
+  await streamChat('/api/agent/chat', { message: question, session_id: store.session }, {
+    sources: (e) => { sources = e.sources || []; renderSources(sources, e.grounded); },
+    delta: (e) => {
+      if (first) { body.innerHTML = ''; first = false; }
+      answer += e.text;
+      body.innerHTML = md(answer);
+      scroll();
+    },
+    error: (e) => { body.innerHTML = `<p style="color:var(--danger)">${escapeHtml(e.message)}</p>`; },
+    done: (e) => {
+      actions.hidden = false;
+      actions.innerHTML =
+        `<button data-a="copy">📋 کپی</button>` +
+        `<button data-a="rewrite">💬 بازنویسی برای مشتری</button>` +
+        `<span style="flex:1"></span>` +
+        `<span class="muted tiny">${faDigits(Math.round((e.latency_ms || 0) / 100) / 10)} ثانیه</span>`;
+      actions.querySelector('[data-a="copy"]').onclick = () => copyText(answer);
+      actions.querySelector('[data-a="rewrite"]').onclick = (ev) => rewrite(answer, ev.currentTarget);
+    },
+  }, { auth: true });
+
+  orb.classList.remove('thinking');
+  busy = false;
+  sendBtn.disabled = !input.value.trim();
+  input.focus();
+}
+
+async function rewrite(text, btn) {
+  const original = btn.textContent;
+  btn.textContent = 'در حال بازنویسی…';
+  btn.disabled = true;
+  try {
+    const res = await api('/api/agent/rewrite', { method: 'POST', body: { text }, auth: true });
+    showRewrite(res.text);
+  } catch (err) {
+    toast(err.message, 'err');
+  } finally {
+    btn.textContent = original;
+    btn.disabled = false;
+  }
+}
+
+function showRewrite(text) {
+  const back = document.createElement('div');
+  back.className = 'modal-backdrop';
+  back.innerHTML = `
+    <div class="modal">
+      <h3 style="margin:0 0 4px">متن آماده‌ی ارسال به مشتری</h3>
+      <p class="muted tiny" style="margin:0 0 16px">اصطلاحات فنی و ارجاع‌های داخلی حذف شده‌اند.</p>
+      <div class="md" style="background:var(--bg);padding:15px;border-radius:14px;font-size:13.5px">${md(text)}</div>
+      <div style="display:flex;gap:9px;margin-top:18px">
+        <button class="btn btn-primary" id="rCopy">کپی متن</button>
+        <button class="btn btn-ghost" id="rClose">بستن</button>
+      </div>
+    </div>`;
+  document.body.appendChild(back);
+  back.addEventListener('click', (e) => { if (e.target === back) back.remove(); });
+  back.querySelector('#rClose').onclick = () => back.remove();
+  back.querySelector('#rCopy').onclick = () => copyText(text);
+}
+
+/* ---------- منابع ---------- */
+function sourceCard(s) {
+  return `
+    <div class="source">
+      <h5>📄 ${escapeHtml(s.title)} <span class="muted" style="font-weight:400">— صفحه ${faDigits(s.page)}</span></h5>
+      <div class="bar"><i style="width:${Math.round((s.score || 0) * 100)}%"></i></div>
+      <p>${escapeHtml(s.snippet || s.text || '')}</p>
+    </div>`;
+}
+
+function renderSources(sources, grounded) {
+  const panel = $('#pSources');
+  if (!sources.length) {
+    panel.innerHTML = `<p class="muted tiny">${grounded === false ? 'برای این سوال چیزی در مستندات پیدا نشد.' : '—'}</p>`;
+    return;
+  }
+  panel.innerHTML = sources.map(sourceCard).join('');
+  panel.querySelectorAll('.source p').forEach((p) =>
+    p.addEventListener('click', () => p.classList.toggle('open'))
+  );
+}
+
+/* ---------- تب‌ها و جستجوی مستقیم ---------- */
+$$('.tabs button').forEach((b) =>
+  b.addEventListener('click', () => {
+    $$('.tabs button').forEach((x) => x.classList.remove('on'));
+    b.classList.add('on');
+    $('#pSources').hidden = b.dataset.tab !== 'sources';
+    $('#pSearch').hidden = b.dataset.tab !== 'search';
+  })
+);
+
+let searchTimer;
+$('#sq').addEventListener('input', (e) => {
+  clearTimeout(searchTimer);
+  const q = e.target.value.trim();
+  if (q.length < 2) { $('#sres').innerHTML = ''; return; }
+  searchTimer = setTimeout(async () => {
+    try {
+      const res = await api(`/api/agent/search?q=${encodeURIComponent(q)}`, { auth: true });
+      $('#sres').innerHTML = res.results.length
+        ? res.results.map(sourceCard).join('')
+        : '<p class="muted tiny">چیزی پیدا نشد.</p>';
+      $('#sres').querySelectorAll('.source p').forEach((p) =>
+        p.addEventListener('click', () => p.classList.toggle('open'))
+      );
+    } catch (err) { toast(err.message, 'err'); }
+  }, 350);
+});
+
+/* ---------- ورودی ---------- */
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = `${Math.min(input.scrollHeight, 150)}px`;
+  sendBtn.disabled = !input.value.trim() || busy;
+});
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
+});
+sendBtn.addEventListener('click', () => ask());
+
+boot();
+</script>
+</body>
+</html>

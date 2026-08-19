@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+"""بررسی سلامت اتصال به AvalAI.
+
+اجرا:  python scripts/check_avalai.py
+این اسکریپت کلید، اعتبار، فهرست مدل‌ها، پاسخ‌دهی و بردارسازی را تست می‌کند.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app import avalai, config  # noqa: E402
+
+OK, BAD, INFO = "✅", "❌", "•"
+
+
+async def main() -> int:
+    failures = 0
+    print(f"\n{INFO} آدرس سرویس: {config.AVALAI_BASE_URL}")
+
+    if not config.AVALAI_API_KEY:
+        print(f"{BAD} کلید AVALAI_API_KEY تنظیم نشده است. فایل .env را بسازید.")
+        return 1
+    print(f"{OK} کلید تنظیم شده است ({config.AVALAI_API_KEY[:6]}…)")
+
+    # ---------- اعتبار ----------
+    try:
+        credit = await avalai.credit()
+        irt = credit.get("remaining_irt", 0)
+        unit = credit.get("total_unit", credit.get("remaining_unit", 0))
+        print(f"{OK} اعتبار: {irt:,.0f} تومان  |  {unit} واحد  |  نرخ: {credit.get('exchange_rate', '—')}")
+        if float(unit or 0) <= 0 and float(irt or 0) <= 0:
+            print(f"   ⚠️  اعتبار حساب صفر است؛ درخواست‌ها رد می‌شوند.")
+    except Exception as exc:  # noqa: BLE001
+        failures += 1
+        print(f"{BAD} خواندن اعتبار ناموفق: {exc}")
+
+    # ---------- فهرست مدل‌ها ----------
+    models: list[str] = []
+    try:
+        models = await avalai.list_models()
+        print(f"{OK} {len(models)} مدل روی این حساب فعال است.")
+    except Exception as exc:  # noqa: BLE001
+        print(f"{INFO} فهرست مدل‌ها در دسترس نبود: {exc}")
+
+    for label, name in (
+        ("مدل پاسخ‌دهی", config.CHAT_MODEL),
+        ("مدل سبک", config.FAST_MODEL),
+        ("مدل بردارسازی", config.EMBEDDING_MODEL),
+    ):
+        if models and name not in models:
+            print(f"   ⚠️  {label} «{name}» در فهرست حساب شما نیست.")
+            similar = [m for m in models if name.split("-")[0] in m][:5]
+            if similar:
+                print(f"      گزینه‌های نزدیک: {', '.join(similar)}")
+
+    # ---------- تست پاسخ‌دهی ----------
+    try:
+        answer = await avalai.chat(
+            [{"role": "user", "content": "فقط بنویس: سلام"}],
+            model=config.CHAT_MODEL,
+            max_tokens=20,
+        )
+        print(f"{OK} مدل پاسخ‌دهی «{config.CHAT_MODEL}» کار می‌کند → {answer[:40]}")
+    except Exception as exc:  # noqa: BLE001
+        failures += 1
+        print(f"{BAD} مدل پاسخ‌دهی «{config.CHAT_MODEL}» کار نکرد: {exc}")
+
+    # ---------- تست بردارسازی ----------
+    try:
+        vectors = await avalai.embed(["تست جستجوی معنایی"])
+        print(f"{OK} مدل بردارسازی «{config.EMBEDDING_MODEL}» کار می‌کند (بُعد {len(vectors[0])})")
+    except Exception as exc:  # noqa: BLE001
+        failures += 1
+        print(f"{BAD} مدل بردارسازی «{config.EMBEDDING_MODEL}» کار نکرد: {exc}")
+        print("   بدون بردارسازی، سیستم به جستجوی کلیدواژه‌ای برمی‌گردد (کیفیت پایین‌تر).")
+
+    print()
+    if failures:
+        print(f"{BAD} {failures} مورد ناموفق بود — .env را اصلاح کنید.\n")
+    else:
+        print(f"{OK} همه چیز آماده است. سرور را اجرا کنید: python run.py\n")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(main()))

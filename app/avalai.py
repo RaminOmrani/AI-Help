@@ -1,0 +1,160 @@
+"""کلاینت AvalAI — سازگار با OpenAI (چت، امبدینگ، اعتبار).
+
+مستندات: https://docs.avalai.ir/en/  |  Base URL: https://api.avalai.ir/v1
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any, AsyncIterator
+
+import httpx
+
+from . import config
+
+
+class AvalAIError(RuntimeError):
+    """خطای قابل نمایش به کاربر."""
+
+
+def _headers() -> dict[str, str]:
+    if not config.AVALAI_API_KEY:
+        raise AvalAIError(
+            "کلید AVALAI_API_KEY تنظیم نشده است. آن را از avalai.ir بگیرید و در فایل \u200e.env\u200e پروژه قرار دهید."
+        )
+    return {
+        "Authorization": f"Bearer {config.AVALAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+
+def _friendly(status: int, body: str) -> str:
+    detail = body.strip()
+    try:
+        parsed = json.loads(body)
+        detail = (
+            parsed.get("error", {}).get("message")
+            if isinstance(parsed.get("error"), dict)
+            else parsed.get("detail") or parsed.get("message") or body
+        ) or body
+    except Exception:
+        pass
+    detail = str(detail)[:400]
+    if status in (401, 403):
+        return f"کلید API معتبر نیست یا دسترسی ندارد ({status}). {detail}"
+    if status == 402:
+        return f"اعتبار حساب AvalAI کافی نیست. {detail}"
+    if status == 429:
+        return f"تعداد درخواست‌ها بیش از حد مجاز است، کمی بعد دوباره تلاش کنید. {detail}"
+    if status == 404:
+        return f"مدل یا اندپوینت پیدا نشد ({status}). نام مدل را در .env بررسی کنید. {detail}"
+    return f"خطای سرویس AvalAI ({status}): {detail}"
+
+
+# ------------------------------------------------------------------
+# چت
+# ------------------------------------------------------------------
+async def chat_stream(
+    messages: list[dict[str, Any]],
+    *,
+    model: str | None = None,
+    temperature: float = 0.25,
+    max_tokens: int = 1600,
+) -> AsyncIterator[str]:
+    """پاسخ مدل را به صورت توکن‌به‌توکن برمی‌گرداند."""
+    payload = {
+        "model": model or config.CHAT_MODEL,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": True,
+    }
+    url = f"{config.AVALAI_BASE_URL}/chat/completions"
+    timeout = httpx.Timeout(config.REQUEST_TIMEOUT, connect=20.0)
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream("POST", url, headers=_headers(), json=payload) as resp:
+            if resp.status_code >= 400:
+                body = (await resp.aread()).decode("utf-8", "replace")
+                raise AvalAIError(_friendly(resp.status_code, body))
+            async for line in resp.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                delta = choices[0].get("delta") or {}
+                piece = delta.get("content")
+                if piece:
+                    yield piece
+
+
+async def chat(
+    messages: list[dict[str, Any]],
+    *,
+    model: str | None = None,
+    temperature: float = 0.25,
+    max_tokens: int = 1200,
+) -> str:
+    """پاسخ کامل (بدون استریم) — برای کارهای داخلی مثل بازنویسی لحن."""
+    payload = {
+        "model": model or config.FAST_MODEL,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    url = f"{config.AVALAI_BASE_URL}/chat/completions"
+    async with httpx.AsyncClient(timeout=config.REQUEST_TIMEOUT) as client:
+        resp = await client.post(url, headers=_headers(), json=payload)
+        if resp.status_code >= 400:
+            raise AvalAIError(_friendly(resp.status_code, resp.text))
+        data = resp.json()
+    try:
+        return (data["choices"][0]["message"]["content"] or "").strip()
+    except (KeyError, IndexError):
+        raise AvalAIError("پاسخ نامعتبر از سرویس دریافت شد.")
+
+
+# ------------------------------------------------------------------
+# امبدینگ
+# ------------------------------------------------------------------
+async def embed(texts: list[str], *, model: str | None = None) -> list[list[float]]:
+    if not texts:
+        return []
+    payload = {"model": model or config.EMBEDDING_MODEL, "input": texts}
+    url = f"{config.AVALAI_BASE_URL}/embeddings"
+    async with httpx.AsyncClient(timeout=config.REQUEST_TIMEOUT) as client:
+        resp = await client.post(url, headers=_headers(), json=payload)
+        if resp.status_code >= 400:
+            raise AvalAIError(_friendly(resp.status_code, resp.text))
+        data = resp.json()
+    items = sorted(data.get("data", []), key=lambda d: d.get("index", 0))
+    return [item["embedding"] for item in items]
+
+
+# ------------------------------------------------------------------
+# اعتبار و مدل‌ها
+# ------------------------------------------------------------------
+async def credit() -> dict[str, Any]:
+    """مانده‌ی اعتبار حساب AvalAI."""
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(config.AVALAI_CREDIT_URL, headers=_headers())
+        if resp.status_code >= 400:
+            raise AvalAIError(_friendly(resp.status_code, resp.text))
+        return resp.json()
+
+
+async def list_models() -> list[str]:
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.get(f"{config.AVALAI_BASE_URL}/models", headers=_headers())
+        if resp.status_code >= 400:
+            raise AvalAIError(_friendly(resp.status_code, resp.text))
+        data = resp.json()
+    return sorted({m.get("id", "") for m in data.get("data", []) if m.get("id")})

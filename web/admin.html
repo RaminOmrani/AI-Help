@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>پنل مدیریت دانش</title>
+<link rel="stylesheet" href="/assets/base.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>">
+<style>
+  body { min-height: 100dvh; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 22px clamp(12px, 3vw, 26px) 60px; }
+
+  header.topbar {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 22px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .brand .orb { width: 40px; height: 40px; font-size: 40px; }
+  .brand b { font-size: 16px; }
+  .spacer { flex: 1; }
+  .icon-btn { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; border: 1px solid var(--border); background: var(--panel-solid); }
+
+  .stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(152px, 1fr)); margin-bottom: 22px; }
+  .stat { padding: 15px 17px; border-radius: 17px; }
+  .stat b { display: block; font-size: 24px; font-weight: 800; line-height: 1.5;
+    background: linear-gradient(120deg, var(--brand), var(--brand-2));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stat span { font-size: 12px; color: var(--muted); }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+  .tabs button {
+    padding: 9px 17px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    border: 1px solid var(--border); background: var(--panel-solid); color: var(--muted);
+  }
+  .tabs button.on { background: linear-gradient(135deg, var(--brand), #8a5cff); color: #fff; border-color: transparent; }
+
+  section.tab { display: none; }
+  section.tab.on { display: block; animation: rise .28s ease; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
+  .drop {
+    border: 2px dashed color-mix(in srgb, var(--brand) 38%, transparent);
+    border-radius: 20px; padding: 30px 22px; text-align: center; margin-bottom: 18px;
+    background: color-mix(in srgb, var(--brand) 5%, transparent); transition: background .2s, border-color .2s;
+  }
+  .drop.over { background: color-mix(in srgb, var(--brand) 13%, transparent); border-color: var(--brand); }
+  .drop h3 { margin: 0 0 6px; font-size: 16px; }
+  .drop p { margin: 0 0 16px; font-size: 12.5px; color: var(--muted); }
+  .opts { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; align-items: center; margin-top: 14px; font-size: 13px; }
+  select.field, input.field { width: auto; padding: 9px 13px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 11px 12px; text-align: right; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  th { font-size: 12px; color: var(--muted); font-weight: 600; }
+  tbody tr:hover { background: color-mix(in srgb, var(--brand) 4%, transparent); }
+  .tablewrap { overflow-x: auto; border-radius: 18px; padding: 6px 14px 10px; }
+
+  .row-actions { display: flex; gap: 5px; justify-content: flex-start; }
+  .row-actions button { font-size: 11.5px; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border); color: var(--muted); }
+  .row-actions button:hover { color: var(--brand); border-color: var(--brand); }
+
+  .list-item { padding: 13px 16px; border-radius: 15px; border: 1px solid var(--border); background: var(--panel-solid); margin-bottom: 9px; font-size: 13px; }
+  .list-item h5 { margin: 0 0 5px; font-size: 13.5px; font-weight: 600; }
+
+  .settings-grid { display: grid; gap: 16px; }
+  .settings-grid label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .settings-grid textarea { min-height: 92px; resize: vertical; }
+
+  .login { position: fixed; inset: 0; display: grid; place-items: center; z-index: 50; padding: 20px; }
+  .login .card { padding: 34px 30px; width: min(380px, 100%); text-align: center; }
+  .login .orb { width: 62px; height: 62px; font-size: 62px; margin: 0 auto 18px; }
+
+  .credit { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="aurora"><span></span><span></span><span></span></div>
+
+<div class="login" id="login" hidden>
+  <div class="card">
+    <div class="orb" data-face="📚"></div>
+    <h2 style="margin:0 0 6px;font-size:19px">پنل مدیریت دانش</h2>
+    <p class="muted" style="margin:0 0 22px;font-size:13px">رمز مدیر را وارد کنید.</p>
+    <input class="field" id="pw" type="password" placeholder="رمز عبور" style="text-align:center">
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;margin-top:12px">ورود</button>
+  </div>
+</div>
+
+<div class="wrap" id="app" hidden>
+  <header class="topbar">
+    <div class="brand">
+      <div class="orb" data-face="📚"></div>
+      <div>
+        <b>پنل مدیریت دانش</b>
+        <div class="muted tiny" id="modelInfo">—</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="themeBtn">🌙</button>
+    <a class="btn btn-sm btn-ghost" href="/agent">کنسول پشتیبان</a>
+    <a class="btn btn-sm btn-ghost" href="/">صفحه‌ی مشتری</a>
+    <button class="btn btn-sm btn-ghost" id="outBtn">خروج</button>
+  </header>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="tabs">
+    <button class="on" data-tab="docs">📚 مستندات</button>
+    <button data-tab="chats">💬 گفتگوها</button>
+    <button data-tab="tickets">🎫 تیکت‌ها</button>
+    <button data-tab="gaps">🕳 خلأهای دانش</button>
+    <button data-tab="settings">⚙️ تنظیمات</button>
+  </div>
+
+  <!-- ---------- مستندات ---------- -->
+  <section class="tab on" id="tab-docs">
+    <div class="drop" id="drop">
+      <h3>📥 فایل‌های راهنما را اینجا رها کنید</h3>
+      <p>PDF، Word (docx)، متن ساده یا Markdown — حداکثر ۶۰ مگابایت برای هر فایل</p>
+      <button class="btn btn-primary" id="pickBtn">انتخاب فایل</button>
+      <button class="btn btn-ghost" id="importBtn">وارد کردن پوشه‌ی docs</button>
+      <input type="file" id="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv">
+      <div class="opts">
+        <span class="muted">این فایل‌ها برای:</span>
+        <select class="field" id="audience">
+          <option value="both">هم مشتری، هم پشتیبان</option>
+          <option value="public">فقط مشتریان</option>
+          <option value="internal">فقط کارشناسان پشتیبانی</option>
+        </select>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="repair" checked> بازسازی متن با هوش مصنوعی
+        </label>
+      </div>
+    </div>
+
+    <div class="card tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>عنوان</th><th>مخاطب</th><th>صفحه</th><th>تکه</th><th>وضعیت</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="docs"><tr><td colspan="6" class="muted">در حال بارگذاری…</td></tr></tbody>
+      </table>
+    </div>
+    <p class="muted tiny" style="margin-top:12px">
+      💡 «فقط کارشناسان» برای فایل‌هایی است که دستور SQL، رمز یا اطلاعات داخلی دارند —
+      دستیار مشتری هرگز به آن‌ها دسترسی نخواهد داشت.
+    </p>
+  </section>
+
+  <!-- ---------- گفتگوها ---------- -->
+  <section class="tab" id="tab-chats">
+    <div class="tabs" style="margin-bottom:14px">
+      <button class="on btn-sm" data-aud="public">گفتگوهای مشتریان</button>
+      <button class="btn-sm" data-aud="internal">گفتگوهای پشتیبان‌ها</button>
+    </div>
+    <div id="chats"></div>
+  </section>
+
+  <!-- ---------- تیکت‌ها ---------- -->
+  <section class="tab" id="tab-tickets"><div id="tickets"></div></section>
+
+  <!-- ---------- خلأها ---------- -->
+  <section class="tab" id="tab-gaps">
+    <p class="muted tiny" style="margin:0 0 14px">
+      سوال‌هایی که پاسخی در مستندات نداشتند یا کاربر آن‌ها را بی‌فایده دانست. این‌ها بهترین راهنما برای تکمیل فایل‌های راهنماست.
+    </p>
+    <div id="gaps"></div>
+  </section>
+
+  <!-- ---------- تنظیمات ---------- -->
+  <section class="tab" id="tab-settings">
+    <div class="card" style="padding:22px">
+      <div class="settings-grid">
+        <div>
+          <label>پیام خوش‌آمد مشتری</label>
+          <textarea class="field" id="s_welcome_customer"></textarea>
+          <p class="muted tiny" style="margin:5px 0 0">می‌توانید از <code>{assistant}</code> و <code>{product}</code> استفاده کنید.</p>
+        </div>
+        <div>
+          <label>پیام خوش‌آمد کنسول پشتیبان</label>
+          <textarea class="field" id="s_welcome_agent"></textarea>
+        </div>
+        <div>
+          <label>سوال‌های پیشنهادی مشتری (هر خط یک سوال)</label>
+          <textarea class="field" id="s_customer_suggestions"></textarea>
+        </div>
+        <div>
+          <label>سوال‌های پیشنهادی پشتیبان (هر خط یک سوال)</label>
+          <textarea class="field" id="s_agent_suggestions"></textarea>
+        </div>
+        <div><button class="btn btn-primary" id="saveSettings">ذخیره‌ی تنظیمات</button></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script type="module">
+import { $, $$, api, toast, store, initTheme, escapeHtml, faDigits, money , setAuthScope } from '/assets/core.js';
+
+setAuthScope('admin');
+initTheme('#themeBtn');
+const login = $('#login'), app = $('#app');
+let pollTimer;
+
+/* ---------- ورود ---------- */
+async function boot() {
+  if (!store.token) return showLogin();
+  try {
+    await refreshStats();
+    login.hidden = true;
+    app.hidden = false;
+    loadDocs();
+    loadChats('public');
+    loadTickets();
+    loadGaps();
+    loadSettings();
+  } catch { showLogin(); }
+}
+function showLogin() { login.hidden = false; app.hidden = true; $('#pw').focus(); }
+
+$('#loginBtn').addEventListener('click', doLogin);
+$('#pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+async function doLogin() {
+  try {
+    const res = await api('/api/auth/login', { method: 'POST', body: { role: 'admin', password: $('#pw').value } });
+    store.token = res.token;
+    boot();
+  } catch (err) { toast(err.message, 'err'); }
+}
+$('#outBtn').addEventListener('click', () => { store.token = ''; location.reload(); });
+
+/* ---------- آمار ---------- */
+async function refreshStats() {
+  const data = await api('/api/admin/stats', { auth: true });
+  const i = data.index, u = data.usage;
+  $('#modelInfo').textContent = `مدل پاسخ: ${data.model} · مدل جستجو: ${data.embedding_model}`;
+  const cards = [
+    [i.ready, 'سند فعال'],
+    [i.pages, 'صفحه‌ی ایندکس‌شده'],
+    [i.chunks, 'تکه‌ی جستجو'],
+    [u.questions, 'سوال پرسیده‌شده'],
+    [u.unanswered, 'بدون پاسخ در مستندات'],
+    [u.open_tickets, 'تیکت باز'],
+  ];
+  $('#stats').innerHTML =
+    cards.map(([v, l]) => `<div class="card stat"><b>${faDigits(v || 0)}</b><span>${l}</span></div>`).join('') +
+    `<div class="card stat" id="creditCard"><b>—</b><span>اعتبار AvalAI</span></div>`;
+
+  if (!data.api_key_set) {
+    toast('کلید AVALAI_API_KEY تنظیم نشده — پاسخ‌دهی کار نمی‌کند.', 'err');
+  } else {
+    loadCredit();
+  }
+}
+
+async function loadCredit() {
+  try {
+    const c = await api('/api/admin/credit', { auth: true });
+    const irt = c.remaining_irt ?? 0;
+    const unit = c.total_unit ?? c.remaining_unit ?? 0;
+    $('#creditCard').innerHTML =
+      `<b>${money(irt)}</b><span>تومان اعتبار · ${faDigits(Number(unit).toFixed(2))} واحد</span>`;
+  } catch (err) {
+    $('#creditCard').innerHTML = `<b style="font-size:14px">—</b><span>${escapeHtml(err.message).slice(0, 60)}</span>`;
+  }
+}
+
+/* ---------- تب‌ها ---------- */
+$$('.tabs > button[data-tab]').forEach((b) =>
+  b.addEventListener('click', () => {
+    $$('.tabs > button[data-tab]').forEach((x) => x.classList.remove('on'));
+    b.classList.add('on');
+    $$('section.tab').forEach((s) => s.classList.remove('on'));
+    $(`#tab-${b.dataset.tab}`).classList.add('on');
+  })
+);
+
+$$('button[data-aud]').forEach((b) =>
+  b.addEventListener('click', () => {
+    $$('button[data-aud]').forEach((x) => x.classList.remove('on'));
+    b.classList.add('on');
+    loadChats(b.dataset.aud);
+  })
+);
+
+/* ---------- مستندات ---------- */
+const AUD = { both: 'همه', public: 'فقط مشتری', internal: 'فقط پشتیبان' };
+const STATUS = {
+  ready:    '<span class="pill pill-ok">آماده</span>',
+  indexing: '<span class="pill pill-warn"><span class="spinner"></span> در حال پردازش</span>',
+  error:    '<span class="pill pill-danger">خطا</span>',
+  pending:  '<span class="pill">در صف</span>',
+};
+
+async function loadDocs() {
+  let docs = [];
+  try { docs = (await api('/api/admin/documents', { auth: true })).documents; }
+  catch (err) { toast(err.message, 'err'); return; }
+
+  $('#docs').innerHTML = docs.length
+    ? docs.map((d) => `
+      <tr>
+        <td>
+          <b>${escapeHtml(d.title)}</b>
+          <div class="muted tiny">${escapeHtml(d.filename)} · ${faDigits(d.size_mb)} مگابایت
+          ${d.repaired ? ` · ${faDigits(d.repaired)} صفحه بازسازی‌شده` : ''}</div>
+        </td>
+        <td>
+          <select class="field tiny" data-aud-for="${d.id}" style="padding:5px 9px;font-size:12px">
+            ${Object.entries(AUD).map(([v, l]) => `<option value="${v}" ${d.audience === v ? 'selected' : ''}>${l}</option>`).join('')}
+          </select>
+        </td>
+        <td>${faDigits(d.pages || 0)}</td>
+        <td>${faDigits(d.chunk_count || 0)}</td>
+        <td>
+          ${STATUS[d.status] || d.status}
+          ${d.progress ? `<div class="muted tiny">${escapeHtml(d.progress)}</div>` : ''}
+          ${d.error ? `<div class="tiny" style="max-width:250px;color:${d.status === 'error' ? 'var(--danger)' : 'var(--muted)'}">${escapeHtml(d.error)}</div>` : ''}
+        </td>
+        <td>
+          <div class="row-actions">
+            <button data-re="${d.id}">پردازش دوباره</button>
+            <button data-del="${d.id}">حذف</button>
+          </div>
+        </td>
+      </tr>`).join('')
+    : '<tr><td colspan="6" class="muted">هنوز فایلی اضافه نشده است.</td></tr>';
+
+  $$('[data-re]').forEach((b) => b.addEventListener('click', async () => {
+    await api(`/api/admin/documents/${b.dataset.re}/reindex`, { method: 'POST', auth: true });
+    toast('پردازش دوباره شروع شد.', 'ok');
+    loadDocs();
+  }));
+  $$('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+    if (!confirm('این سند و همه‌ی تکه‌های آن حذف شود؟')) return;
+    await api(`/api/admin/documents/${b.dataset.del}`, { method: 'DELETE', auth: true });
+    toast('حذف شد.', 'ok');
+    loadDocs(); refreshStats();
+  }));
+  $$('[data-aud-for]').forEach((s) => s.addEventListener('change', async () => {
+    await api(`/api/admin/documents/${s.dataset.audFor}`, {
+      method: 'PATCH', auth: true, body: { audience: s.value },
+    });
+    toast('دسترسی به‌روزرسانی شد.', 'ok');
+  }));
+
+  clearTimeout(pollTimer);
+  if (docs.some((d) => d.status === 'indexing')) {
+    pollTimer = setTimeout(() => { loadDocs(); refreshStats(); }, 3000);
+  }
+}
+
+/* ---------- بارگذاری فایل ---------- */
+const drop = $('#drop'), fileInput = $('#file');
+$('#pickBtn').addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => upload([...fileInput.files]));
+
+['dragenter', 'dragover'].forEach((ev) =>
+  drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add('over'); })
+);
+['dragleave', 'drop'].forEach((ev) =>
+  drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove('over'); })
+);
+drop.addEventListener('drop', (e) => upload([...e.dataTransfer.files]));
+
+async function upload(files) {
+  if (!files.length) return;
+  const form = new FormData();
+  files.forEach((f) => form.append('files', f));
+  form.append('audience', $('#audience').value);
+  form.append('ai_repair', $('#repair').checked ? 'true' : 'false');
+
+  toast(`در حال بارگذاری ${faDigits(files.length)} فایل…`);
+  try {
+    const res = await api('/api/admin/documents', { method: 'POST', body: form, auth: true });
+    const failed = res.results.filter((r) => !r.ok);
+    failed.forEach((r) => toast(`${r.file}: ${r.error}`, 'err'));
+    if (res.results.some((r) => r.ok)) toast('بارگذاری شد؛ پردازش در حال انجام است.', 'ok');
+    fileInput.value = '';
+    loadDocs(); refreshStats();
+  } catch (err) { toast(err.message, 'err'); }
+}
+
+$('#importBtn').addEventListener('click', async () => {
+  try {
+    const res = await api('/api/admin/documents/import-folder', { method: 'POST', auth: true });
+    toast(`${faDigits(res.added.length)} فایل جدید اضافه شد.`, 'ok');
+    loadDocs(); refreshStats();
+  } catch (err) { toast(err.message, 'err'); }
+});
+
+/* ---------- گفتگوها ---------- */
+async function loadChats(audience) {
+  const res = await api(`/api/admin/conversations?audience=${audience}`, { auth: true });
+  $('#chats').innerHTML = res.conversations.length
+    ? res.conversations.map((c) => `
+      <div class="list-item">
+        <h5>${escapeHtml(c.title || 'بدون عنوان')}</h5>
+        <div class="muted tiny">${faDigits(c.turns)} پیام · ${escapeHtml(c.created_at)}</div>
+        <button class="btn btn-sm btn-ghost" style="margin-top:8px" data-conv="${c.id}">مشاهده</button>
+      </div>`).join('')
+    : '<p class="muted tiny">گفتگویی ثبت نشده است.</p>';
+
+  $$('[data-conv]').forEach((b) => b.addEventListener('click', () => showConversation(b.dataset.conv)));
+}
+
+async function showConversation(id) {
+  const res = await api(`/api/admin/conversations/${id}`, { auth: true });
+  const back = document.createElement('div');
+  back.className = 'modal-backdrop';
+  back.innerHTML = `
+    <div class="modal" style="width:min(680px,100%)">
+      <h3 style="margin:0 0 16px">متن گفتگو</h3>
+      ${res.messages.map((m) => `
+        <div style="margin-bottom:14px">
+          <div class="pill ${m.role === 'user' ? '' : 'pill-ok'}">${m.role === 'user' ? 'کاربر' : 'دستیار'}</div>
+          <div style="margin-top:6px;font-size:13.5px;white-space:pre-wrap">${escapeHtml(m.content)}</div>
+          ${m.sources?.length ? `<div class="muted tiny" style="margin-top:5px">منابع: ${m.sources.map((s) => escapeHtml(`${s.title} ص${s.page}`)).join('، ')}</div>` : ''}
+        </div>`).join('')}
+      <button class="btn btn-ghost" id="cClose" style="margin-top:8px">بستن</button>
+    </div>`;
+  document.body.appendChild(back);
+  back.addEventListener('click', (e) => { if (e.target === back) back.remove(); });
+  back.querySelector('#cClose').onclick = () => back.remove();
+}
+
+/* ---------- تیکت‌ها ---------- */
+async function loadTickets() {
+  const res = await api('/api/admin/tickets', { auth: true });
+  $('#tickets').innerHTML = res.tickets.length
+    ? res.tickets.map((t) => `
+      <div class="list-item">
+        <h5>${escapeHtml(t.subject || 'بدون موضوع')}
+          ${t.status === 'open' ? '<span class="pill pill-warn">باز</span>' : '<span class="pill pill-ok">بسته</span>'}
+        </h5>
+        <div style="white-space:pre-wrap;margin:6px 0">${escapeHtml(t.body)}</div>
+        <div class="muted tiny">${escapeHtml(t.name || 'ناشناس')} · ${escapeHtml(t.contact || 'بدون تماس')} · ${escapeHtml(t.created_at)}</div>
+        ${t.status === 'open' ? `<button class="btn btn-sm btn-ghost" style="margin-top:8px" data-close="${t.id}">بستن تیکت</button>` : ''}
+      </div>`).join('')
+    : '<p class="muted tiny">تیکتی ثبت نشده است.</p>';
+
+  $$('[data-close]').forEach((b) => b.addEventListener('click', async () => {
+    await api(`/api/admin/tickets/${b.dataset.close}`, { method: 'PATCH', auth: true });
+    loadTickets(); refreshStats();
+  }));
+}
+
+/* ---------- خلأهای دانش ---------- */
+async function loadGaps() {
+  const res = await api('/api/admin/gaps', { auth: true });
+  $('#gaps').innerHTML = res.gaps.length
+    ? res.gaps.map((g) => `
+      <div class="list-item">
+        <h5>${escapeHtml(g.question)}</h5>
+        <div class="muted tiny">${g.audience === 'public' ? 'مشتری' : 'پشتیبان'} · ${escapeHtml(g.created_at)}</div>
+      </div>`).join('')
+    : '<p class="muted tiny">فعلاً خلأی ثبت نشده — یعنی مستندات جواب همه را داده‌اند 🎉</p>';
+}
+
+/* ---------- تنظیمات ---------- */
+async function loadSettings() {
+  const res = await api('/api/admin/settings', { auth: true });
+  const s = res.settings;
+  $('#s_welcome_customer').value = s.welcome_customer || '';
+  $('#s_welcome_agent').value = s.welcome_agent || '';
+  $('#s_customer_suggestions').value = parseList(s.customer_suggestions).join('\n');
+  $('#s_agent_suggestions').value = parseList(s.agent_suggestions).join('\n');
+}
+
+const parseList = (raw) => { try { return JSON.parse(raw || '[]'); } catch { return []; } };
+
+$('#saveSettings').addEventListener('click', async () => {
+  const toJson = (id) =>
+    JSON.stringify($(`#${id}`).value.split('\n').map((x) => x.trim()).filter(Boolean));
+  try {
+    await api('/api/admin/settings', {
+      method: 'PUT', auth: true,
+      body: {
+        values: {
+          welcome_customer: $('#s_welcome_customer').value,
+          welcome_agent: $('#s_welcome_agent').value,
+          customer_suggestions: toJson('s_customer_suggestions'),
+          agent_suggestions: toJson('s_agent_suggestions'),
+        },
+      },
+    });
+    toast('تنظیمات ذخیره شد ✓', 'ok');
+  } catch (err) { toast(err.message, 'err'); }
+});
+
+boot();
+</script>
+</body>
+</html>

@@ -1,20 +1,27 @@
-# Virtual environment
+# محیط مجازی
 venv/
+.venv/
+
+# تنظیمات و کلیدها
 .env
 .env.*
+!.env.example
 
-# Python cache
+# داده‌های تولیدشده
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# کش پایتون
 __pycache__/
-*.pyc
-*.pyo
+*.py[cod]
 
-# IDEs
+# ویرایشگرها و سیستم‌عامل
 .vscode/
 .idea/
-
-# OS files
 .DS_Store
 Thumbs.db
 
-# Logs
+# لاگ
 *.log
