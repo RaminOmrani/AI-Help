@@ -252,6 +252,7 @@ async def agent_rewrite(payload: RewriteIn, role: str = Depends(security.require
     text = payload.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="متنی برای بازنویسی داده نشد.")
+    stream_meta: dict = {}
     try:
         result = await avalai.chat(
             [
@@ -259,10 +260,16 @@ async def agent_rewrite(payload: RewriteIn, role: str = Depends(security.require
                 {"role": "user", "content": text},
             ],
             temperature=0.4,
+            max_tokens=config.ANSWER_MAX_TOKENS,
+            meta=stream_meta,
         )
     except avalai.AvalAIError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
-    return {"text": result}
+
+    truncated = stream_meta.get("finish_reason") == "length"
+    if truncated:
+        result += "\n\n⚠️ متن به سقف طول رسید و ناقص ماند — پاسخ اصلی را کوتاه‌تر کنید."
+    return {"text": result, "truncated": truncated}
 
 
 @app.get("/api/agent/search")

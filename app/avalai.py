@@ -131,14 +131,19 @@ async def chat(
     *,
     model: str | None = None,
     temperature: float = 0.25,
-    max_tokens: int = 1200,
+    max_tokens: int | None = None,
+    meta: dict | None = None,
 ) -> str:
-    """پاسخ کامل (بدون استریم) — برای کارهای داخلی مثل بازنویسی لحن."""
+    """پاسخ کامل (بدون استریم) — برای بازنویسی لحن، بازسازی متن و خواندن تصویر.
+
+    سقف پیش‌فرض همان سقف پاسخ‌های چت است تا هیچ مسیری پاسخ را وسط جمله نبُرد.
+    اگر `meta` داده شود، `finish_reason` در آن نوشته می‌شود.
+    """
     payload = {
         "model": model or settings.fast_model(),
         "messages": messages,
         "temperature": temperature,
-        "max_tokens": max_tokens,
+        "max_tokens": max_tokens or config.ANSWER_MAX_TOKENS,
     }
     url = f"{config.AVALAI_BASE_URL}/chat/completions"
     async with httpx.AsyncClient(timeout=config.REQUEST_TIMEOUT) as client:
@@ -147,9 +152,13 @@ async def chat(
             raise AvalAIError(_friendly(resp.status_code, resp.text))
         data = resp.json()
     try:
-        return (data["choices"][0]["message"]["content"] or "").strip()
+        choice = data["choices"][0]
     except (KeyError, IndexError):
         raise AvalAIError("پاسخ نامعتبر از سرویس دریافت شد.")
+
+    if meta is not None and choice.get("finish_reason"):
+        meta["finish_reason"] = choice["finish_reason"]
+    return (choice.get("message", {}).get("content") or "").strip()
 
 
 # ------------------------------------------------------------------

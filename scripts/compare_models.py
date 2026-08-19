@@ -6,13 +6,13 @@
 واقعی تومانی** هر مدل را از تفاضل اعتبار حساب AvalAI حساب می‌کند.
 
     # مقایسه‌ی چند مدل با سوال‌های پیش‌فرض
-    python scripts/compare_models.py gemini-2.5-flash gpt-4o-mini
+    python scripts/compare_models.py gemini-3.7-flash gemini-3.5-flash
 
     # با سوال‌های خودتان
     python scripts/compare_models.py --ask "چطور بکاپ بگیرم؟" --ask "خطای اتصال به SQL" مدل۱ مدل۲
 
     # برای دستیار پشتیبان به‌جای مشتری
-    python scripts/compare_models.py --audience internal gemini-2.5-flash
+    python scripts/compare_models.py --audience internal gemini-3.7-flash
 
 خروجی علاوه بر ترمینال، در قالب یک صفحه‌ی HTML هم ذخیره می‌شود تا بتوانید
 پاسخ‌ها را با آرامش کنار هم بخوانید.
@@ -29,7 +29,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app import avalai, config, db, prompts, rag  # noqa: E402
+from app import avalai, config, db, prompts, rag, settings  # noqa: E402
 
 DEFAULT_QUESTIONS_PUBLIC = [
     "چطور از اطلاعاتم پشتیبان (بکاپ) بگیرم؟",
@@ -63,14 +63,18 @@ async def ask_one(question: str, model: str, audience: str) -> dict:
     ]
 
     started = time.time()
+    meta: dict = {}
     try:
         answer = await avalai.chat(
             messages,
             model=model,
             temperature=0.2 if audience == "internal" else 0.35,
-            max_tokens=1600,
+            max_tokens=config.ANSWER_MAX_TOKENS,
+            meta=meta,
         )
         error = ""
+        if meta.get("finish_reason") == "length":
+            error = "⚠️ پاسخ به سقف طول رسید و ناقص است."
     except Exception as exc:  # noqa: BLE001
         answer, error = "", str(exc)
 
@@ -100,7 +104,7 @@ async def run_model(model: str, questions: list[str], audience: str) -> dict:
 
     after = await _credit_irt()
     cost = round(before - after) if (before is not None and after is not None) else None
-    ok = [r for r in results if not r["error"]]
+    ok = [r for r in results if r["answer"]]
 
     if cost is not None:
         per = round(cost / len(questions)) if questions else 0
@@ -126,10 +130,10 @@ def write_report(runs: list[dict], questions: list[str], path: Path) -> None:
         for run in runs:
             r = run["results"][i]
             body = (
-                f'<p class="err">{esc(r["error"][:300])}</p>'
-                if r["error"]
-                else f'<pre>{esc(r["answer"])}</pre>'
-                f'<div class="meta">{r["seconds"]} ثانیه · {r["chars"]} نویسه</div>'
+                (f'<p class="err">{esc(r["error"][:300])}</p>' if r["error"] else "")
+                + (f'<pre>{esc(r["answer"])}</pre>'
+                   f'<div class="meta">{r["seconds"]} ثانیه · {r["chars"]} نویسه</div>'
+                   if r["answer"] else "")
             )
             cells.append(f"<td>{body}</td>")
         rows.append(
@@ -150,12 +154,12 @@ def write_report(runs: list[dict], questions: list[str], path: Path) -> None:
     path.write_text(
         f"""<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
 <title>مقایسه‌ی مدل‌ها</title><style>
-body{{font-family:Vazirmatn,Tahoma,sans-serif;background:#f6f5fb;color:#16142b;padding:26px;line-height:1.9}}
+body{{font-family:Vazirmatn,Tahoma,sans-serif;background:#faf7f2;color:#2a2521;padding:26px;line-height:1.9}}
 h1{{font-size:20px}} table{{border-collapse:collapse;width:100%;background:#fff;border-radius:14px;overflow:hidden}}
-th,td{{border:1px solid #e6e3f0;padding:13px;text-align:right;vertical-align:top;font-size:13.5px}}
-thead th{{background:#6d3bf5;color:#fff}} th.q{{background:#faf9ff;width:210px}}
+th,td{{border:1px solid #e8e0d5;padding:13px;text-align:right;vertical-align:top;font-size:13.5px}}
+thead th{{background:#0f7d76;color:#fff}} th.q{{background:#f2ede5;width:210px}}
 pre{{white-space:pre-wrap;font-family:inherit;margin:0}} .meta{{font-size:11px;opacity:.65;margin-top:6px;font-weight:400}}
-.err{{color:#e0435a;margin:0}}</style></head><body>
+.err{{color:#c2410c;margin:0}}</style></head><body>
 <h1>مقایسه‌ی مدل‌ها روی مستندات شما</h1>
 <table><thead><tr><th class="q">سوال</th>{headers}</tr></thead><tbody>{"".join(rows)}</tbody></table>
 </body></html>""",
@@ -174,16 +178,16 @@ async def main() -> int:
     parser.add_argument("--out", default="model-comparison.html", help="مسیر گزارش HTML")
     args = parser.parse_args()
 
-    if not config.AVALAI_API_KEY:
-        print("❌ کلید AVALAI_API_KEY تنظیم نشده است.")
+    db.init_db()
+    if not settings.api_key():
+        print("❌ کلید AvalAI ثبت نشده است — در پنل مدیریت یا فایل .env واردش کنید.")
         return 1
 
-    db.init_db()
     if rag.stats()["ready"] == 0:
         print("❌ هنوز سندی ایندکس نشده. اول از پنل مدیریت فایل‌ها را بارگذاری کنید.")
         return 1
 
-    models = args.models or [config.CHAT_MODEL]
+    models = args.models or [settings.chat_model()]
     questions = args.ask or (
         DEFAULT_QUESTIONS_PUBLIC if args.audience == "public" else DEFAULT_QUESTIONS_INTERNAL
     )

@@ -43,7 +43,7 @@ async def fake_embed(texts, model=None):
     return [fake_vector(t) for t in texts]
 
 
-async def fake_chat(messages, model=None, temperature=0.0, max_tokens=None):
+async def fake_chat(messages, model=None, temperature=0.0, max_tokens=None, meta=None):
     calls["chat"] += 1
     user = messages[-1]["content"]
     # درخواست بینایی: محتوا لیستی شامل تصویر است
@@ -204,6 +204,36 @@ async def main():
     assert "ناقص ماند" in text, "پاسخ بریده‌شده بی‌صدا رد شد"
     chat_service.avalai.chat_stream = fake_stream
     print("✅ پاسخ بریده‌شده به کاربر اعلام می‌شود")
+
+    # ---- «بازنویسی برای مشتری» نباید نصفه بماند ----
+    from app import avalai as app_avalai
+
+    rewrite_seen = {}
+
+    async def rewrite_chat(messages, model=None, temperature=0.0, max_tokens=None, meta=None):
+        rewrite_seen["max_tokens"] = max_tokens
+        rewrite_seen["system"] = messages[0]["content"]
+        if meta is not None:
+            meta["finish_reason"] = "length"      # وانمود می‌کنیم به سقف خورده
+        return "متن نیمه‌کاره‌ی ب"
+
+    real_chat = app_avalai.chat
+    app_avalai.chat = rewrite_chat
+    try:
+        from app import main as app_main
+        response = await app_main.agent_rewrite(
+            app_main.RewriteIn(text="یک پاسخ فنی طولانی"), role="agent"
+        )
+    finally:
+        app_avalai.chat = real_chat
+        avalai.chat = fake_chat
+
+    assert rewrite_seen["max_tokens"] == app_config.ANSWER_MAX_TOKENS, \
+        "بازنویسی برای مشتری سقف توکن جداگانه دارد — پاسخ بریده می‌شود"
+    assert "کامل تمام کن" in rewrite_seen["system"], "دستور «کامل تمام کن» در پرامپت بازنویسی نیست"
+    assert response["truncated"] and "ناقص ماند" in response["text"], \
+        "بازنویسیِ بریده‌شده بی‌صدا رد شد"
+    print("✅ «بازنویسی برای مشتری» همان سقف را دارد و اگر ناقص بماند اعلام می‌شود")
 
     # ---- خواندن تصویری صفحه‌های PDF ----
     guide = next(
