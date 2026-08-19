@@ -133,6 +133,8 @@ export const store = {
     return id;
   },
   useSession(id) { localStorage.setItem('ai_session', id); },
+  get length() { return localStorage.getItem('ai_length') || 'normal'; },
+  set length(v) { localStorage.setItem('ai_length', v); },
 };
 
 /* ---------- درخواست‌ها ---------- */
@@ -296,4 +298,30 @@ export function openHistoryDrawer({ load, open, remove, fresh }) {
   load().then(render).catch((err) => {
     list.innerHTML = `<p class="empty-note">${escapeHtml(err.message)}</p>`;
   });
+}
+
+
+/* ---------- انتخاب طول پاسخ ---------- */
+const LENGTHS = [
+  ['short', 'کوتاه', 'فقط جواب مستقیم، بدون توضیح اضافه'],
+  ['normal', 'متوسط', 'گام‌های لازم، بدون حاشیه'],
+  ['detailed', 'کامل', 'همه‌ی جزئیاتی که در مستندات هست'],
+];
+
+/** یک انتخابگر طول پاسخ داخل عنصر داده‌شده می‌سازد. مقدار در مرورگر ذخیره می‌شود. */
+export function mountLengthPicker(host) {
+  if (!host) return;
+  host.className = 'seg';
+  host.innerHTML = LENGTHS
+    .map(([id, label, hint]) =>
+      `<button data-len="${id}" title="${escapeHtml(hint)}">${label}</button>`)
+    .join('');
+
+  const paint = () => {
+    host.querySelectorAll('button').forEach((b) =>
+      b.classList.toggle('on', b.dataset.len === store.length));
+  };
+  host.querySelectorAll('button').forEach((b) =>
+    b.addEventListener('click', () => { store.length = b.dataset.len; paint(); }));
+  paint();
 }

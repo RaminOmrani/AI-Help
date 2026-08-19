@@ -40,6 +40,7 @@ class ChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     session_id: str = Field(default="anonymous", max_length=64)
     client_id: str = Field(default="", max_length=64)
+    length: str = Field(default="normal", pattern="^(short|normal|detailed)$")
     model: str | None = None
 
 
@@ -117,6 +118,7 @@ async def customer_chat(payload: ChatIn):
             session_id=payload.session_id,
             audience="public",
             client_id=payload.client_id,
+            length=payload.length,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -218,6 +220,7 @@ async def agent_chat(payload: ChatIn, role: str = Depends(security.require_staff
             audience="internal",
             model=payload.model,
             client_id=payload.client_id,
+            length=payload.length,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

@@ -304,7 +304,8 @@ async def search(
     if not rows:
         return []
 
-    top_k = top_k or config.TOP_K
+    # کارشناس پشتیبانی به جزئیات بیشتری نیاز دارد تا مقادیر دقیق از قلم نیفتند
+    top_k = top_k or (config.TOP_K + 4 if audience == "internal" else config.TOP_K)
     allowed = {"both", audience}
     mask = np.array([r["audience"] in allowed for r in rows], dtype=bool)
     if not mask.any():

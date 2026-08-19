@@ -13,36 +13,60 @@
 }
 
 :root {
-  --brand:        #6d3bf5;
-  --brand-2:      #12b6c9;
-  --brand-3:      #ff5c8a;
-  --bg:           #f6f5fb;
-  --bg-soft:      #ffffff;
-  --panel:        rgba(255,255,255,.78);
+  /* رنگ‌های اصلی — سبزآبیِ آرام روی زمینه‌ی کرمِ گرم.
+     همه‌ی ترکیب‌های متن/زمینه نسبت کنتراست ۴.۵:۱ (WCAG AA) را رد می‌کنند. */
+  --brand:        #0f7d76;   /* سبزآبی آرام — رنگ اصلی */
+  --brand-deep:   #0a5f5a;   /* تیره‌تر، برای گرادیان و حالت فشرده */
+  --brand-soft:   #d9efec;   /* پس‌زمینه‌ی ملایمِ برند */
+  --on-brand:     #ffffff;   /* رنگ متن روی زمینه‌ی برند */
+  --accent:       #b45309;   /* کهربایی گرم — تأکید و نکته */
+  --accent-soft:  #fdf0dd;
+
+  --bg:           #faf7f2;   /* کرم گرم، نه سفیدِ خیره‌کننده */
+  --bg-tint:      #f2ede5;
+  --panel:        rgba(255, 255, 255, .82);
   --panel-solid:  #ffffff;
-  --border:       rgba(16,14,40,.10);
-  --text:         #16142b;
-  --muted:        #6b6880;
-  --ok:           #14a06a;
-  --warn:         #e08b00;
-  --danger:       #e0435a;
-  --shadow:       0 18px 44px -22px rgba(29,18,72,.42);
-  --shadow-sm:    0 6px 18px -10px rgba(29,18,72,.35);
+  --border:       #e8e0d5;
+  --border-soft:  #f0eae1;
+
+  --text:         #2a2521;   /* مشکیِ گرم، نه مشکیِ آبی */
+  --muted:        #6f6660;
+
+  --ok:           #157f56;
+  --warn:         #a16207;
+  --danger:       #c2410c;
+
+  --shadow:       0 14px 40px -22px rgba(58, 45, 32, .34);
+  --shadow-sm:    0 4px 14px -8px rgba(58, 45, 32, .28);
   --radius:       20px;
   --radius-sm:    12px;
   --font:         'Vazirmatn', 'Segoe UI', Tahoma, system-ui, sans-serif;
 }
 
 [data-theme="dark"] {
-  --bg:          #0c0b16;
-  --bg-soft:     #14122250;
-  --panel:       rgba(26,24,44,.72);
-  --panel-solid: #1a1830;
-  --border:      rgba(255,255,255,.10);
-  --text:        #edeaf7;
-  --muted:       #9d99b5;
-  --shadow:      0 18px 44px -20px rgba(0,0,0,.75);
-  --shadow-sm:   0 6px 20px -12px rgba(0,0,0,.7);
+  --brand:        #4ecdc4;
+  --brand-deep:   #7ee0d8;
+  --brand-soft:   #17332f;
+  --on-brand:     #0a1f1d;   /* در حالت تیره، برند روشن است پس متن باید تیره باشد */
+  --accent:       #f0b45e;
+  --accent-soft:  #33291a;
+
+  --bg:           #191614;   /* زغالیِ گرم، نه سرمه‌ای */
+  --bg-tint:      #211d1a;
+  --panel:        rgba(34, 30, 27, .82);
+  --panel-solid:  #221e1b;
+  --border:       #352f2a;
+  --border-soft:  #2b2622;
+
+  --text:         #f0ebe5;
+  --muted:        #a79e96;
+
+  --ok:           #4ade80;
+  --warn:         #fbbf24;
+  --danger:       #fb923c;
+
+  --shadow:       0 16px 44px -24px rgba(0, 0, 0, .8);
+  --shadow-sm:    0 4px 16px -10px rgba(0, 0, 0, .7);
 }
 
 * { box-sizing: border-box; }
@@ -65,31 +89,33 @@ body {
   line-height: 1.85;
 }
 
-/* --- پس‌زمینه‌ی زنده --- */
+/* --- پس‌زمینه‌ی آرام: یک هاله‌ی ملایم، بدون رنگ‌های تند --- */
 .aurora {
   position: fixed;
   inset: 0;
   z-index: -1;
   overflow: hidden;
   pointer-events: none;
+  background:
+    radial-gradient(80vw 60vh at 78% -8%,  color-mix(in srgb, var(--brand) 12%, transparent), transparent 62%),
+    radial-gradient(70vw 55vh at 10% 105%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%);
 }
 .aurora span {
   position: absolute;
   display: block;
   border-radius: 50%;
   filter: blur(90px);
-  opacity: .34;
-  animation: drift 22s ease-in-out infinite;
+  opacity: .16;
+  animation: drift 30s ease-in-out infinite;
 }
-.aurora span:nth-child(1){ width: 46vw; height: 46vw; background: var(--brand);   top: -12vw; inset-inline-start: -10vw; }
-.aurora span:nth-child(2){ width: 38vw; height: 38vw; background: var(--brand-2); bottom: -14vw; inset-inline-end: -8vw; animation-delay: -7s; }
-.aurora span:nth-child(3){ width: 30vw; height: 30vw; background: var(--brand-3); top: 34vh; inset-inline-end: 26vw; animation-delay: -13s; opacity: .3; }
-[data-theme="dark"] .aurora span { opacity: .26; }
+.aurora span:nth-child(1) { width: 40vw; height: 40vw; background: var(--brand);  top: -10vw; inset-inline-start: -8vw; }
+.aurora span:nth-child(2) { width: 32vw; height: 32vw; background: var(--accent); bottom: -12vw; inset-inline-end: -6vw; animation-delay: -10s; }
+.aurora span:nth-child(3) { display: none; }
+[data-theme="dark"] .aurora span { opacity: .12; }
 
 @keyframes drift {
-  0%, 100% { transform: translate3d(0,0,0) scale(1); }
-  33%      { transform: translate3d(3vw, 4vh, 0) scale(1.12); }
-  66%      { transform: translate3d(-4vw, -3vh, 0) scale(.94); }
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(2vw, 3vh, 0) scale(1.08); }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -125,10 +151,10 @@ a { color: var(--brand); }
 .btn:active { transform: translateY(0); }
 .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
 .btn-primary {
-  background: linear-gradient(135deg, var(--brand), #8a5cff);
-  color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand-deep));
+  color: var(--on-brand);
   border-color: transparent;
-  box-shadow: 0 10px 26px -12px var(--brand);
+  box-shadow: 0 8px 20px -10px color-mix(in srgb, var(--brand) 60%, transparent);
 }
 .btn-ghost { background: transparent; }
 .btn-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
@@ -168,9 +194,9 @@ a { color: var(--brand); }
   border-radius: 999px;
   font-size: 12px;
   font-weight: 500;
-  background: color-mix(in srgb, var(--brand) 12%, transparent);
-  color: color-mix(in srgb, var(--brand) 82%, var(--text));
-  border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
+  background: var(--brand-soft);
+  color: color-mix(in srgb, var(--brand) 88%, var(--text));
+  border: 1px solid color-mix(in srgb, var(--brand) 24%, transparent);
 }
 .pill-ok     { background: color-mix(in srgb, var(--ok) 14%, transparent);     color: var(--ok);     border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
 .pill-warn   { background: color-mix(in srgb, var(--warn) 16%, transparent);   color: var(--warn);   border-color: color-mix(in srgb, var(--warn) 32%, transparent); }
@@ -180,8 +206,8 @@ a { color: var(--brand); }
 .orb {
   position: relative;
   border-radius: 50%;
-  background: conic-gradient(from 180deg, var(--brand), var(--brand-2), var(--brand-3), var(--brand));
-  box-shadow: 0 8px 26px -8px color-mix(in srgb, var(--brand) 65%, transparent);
+  background: conic-gradient(from 200deg, var(--brand), var(--accent), var(--brand-deep), var(--brand));
+  box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--brand) 50%, transparent);
   animation: breathe 5.5s ease-in-out infinite;
   flex: none;
 }
@@ -225,8 +251,8 @@ a { color: var(--brand); }
 .md pre {
   direction: ltr;
   text-align: left;
-  background: #14122a;
-  color: #e6e2ff;
+  background: #2a2521;
+  color: #f0ebe5;
   padding: 13px 15px;
   border-radius: var(--radius-sm);
   overflow-x: auto;
@@ -237,11 +263,14 @@ a { color: var(--brand); }
 .md table { border-collapse: collapse; width: 100%; margin: .6em 0; font-size: .92em; }
 .md th, .md td { border: 1px solid var(--border); padding: 6px 10px; text-align: right; }
 .md blockquote {
-  margin: .6em 0;
-  padding: 2px 14px;
-  border-inline-start: 3px solid var(--brand);
-  color: var(--muted);
+  margin: .7em 0;
+  padding: 9px 14px;
+  border-inline-start: 3px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 10px 10px 0;
+  color: var(--text);
 }
+[dir="rtl"] .md blockquote { border-radius: 10px 0 0 10px; }
 
 /* --- اسکرول‌بار --- */
 ::-webkit-scrollbar { width: 9px; height: 9px; }
@@ -392,3 +421,33 @@ a { color: var(--brand); }
 .conv .del:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
 
 .drawer .empty-note { padding: 26px 18px; text-align: center; color: var(--muted); font-size: 12.5px; line-height: 2; }
+
+/* ============================================================
+   انتخاب طول پاسخ
+   ============================================================ */
+.seg {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--bg-tint);
+  border: 1px solid var(--border-soft);
+}
+.seg button {
+  padding: 5px 13px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+.seg button:hover { color: var(--text); }
+.seg button.on {
+  background: var(--panel-solid);
+  color: var(--brand);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+.seg-label { font-size: 11.5px; color: var(--muted); margin-inline-end: 2px; }

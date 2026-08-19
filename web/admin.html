@@ -22,7 +22,7 @@
   .stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(152px, 1fr)); margin-bottom: 22px; }
   .stat { padding: 15px 17px; border-radius: 17px; }
   .stat b { display: block; font-size: 24px; font-weight: 800; line-height: 1.5;
-    background: linear-gradient(120deg, var(--brand), var(--brand-2));
+    background: linear-gradient(120deg, var(--brand-deep), var(--brand));
     -webkit-background-clip: text; background-clip: text; color: transparent; }
   .stat span { font-size: 12px; color: var(--muted); }
 
@@ -31,7 +31,7 @@
     padding: 9px 17px; border-radius: 999px; font-size: 13px; font-weight: 600;
     border: 1px solid var(--border); background: var(--panel-solid); color: var(--muted);
   }
-  .tabs button.on { background: linear-gradient(135deg, var(--brand), #8a5cff); color: #fff; border-color: transparent; }
+  .tabs button.on { background: linear-gradient(135deg, var(--brand), var(--brand-deep)); color: var(--on-brand); border-color: transparent; }
 
   section.tab { display: none; }
   section.tab.on { display: block; animation: rise .28s ease; }

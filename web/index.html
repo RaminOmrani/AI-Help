@@ -41,7 +41,7 @@
   .hero .orb { width: 96px; height: 96px; font-size: 96px; margin: 0 auto 22px; }
   .hero h1 {
     font-size: clamp(23px, 5vw, 33px); font-weight: 800; margin: 0 0 10px; letter-spacing: -.4px;
-    background: linear-gradient(120deg, var(--brand), var(--brand-2) 55%, var(--brand-3));
+    background: linear-gradient(115deg, var(--brand-deep), var(--brand) 55%, var(--accent));
     -webkit-background-clip: text; background-clip: text; color: transparent;
   }
   .hero p { margin: 0 auto; max-width: 480px; color: var(--muted); font-size: 14.5px; }
@@ -68,11 +68,11 @@
   }
   .msg.bot  .bubble { background: var(--panel-solid); border: 1px solid var(--border); border-start-end-radius: 7px; }
   .msg.user .bubble {
-    background: linear-gradient(135deg, var(--brand), #8a5cff);
-    color: #fff; border-start-start-radius: 7px;
-    box-shadow: 0 12px 26px -14px var(--brand);
+    background: linear-gradient(135deg, var(--brand), var(--brand-deep));
+    color: var(--on-brand); border-start-start-radius: 7px;
+    box-shadow: 0 8px 20px -12px color-mix(in srgb, var(--brand) 65%, transparent);
   }
-  .msg.user .bubble .md strong { color: #fff; }
+  .msg.user .bubble .md strong { color: var(--on-brand); }
 
   .caret::after {
     content: ''; display: inline-block; width: 2px; height: 1em;
@@ -122,9 +122,9 @@
   }
   .send {
     width: 42px; height: 42px; border-radius: 50%; flex: none;
-    background: linear-gradient(135deg, var(--brand), #8a5cff); color: #fff;
+    background: linear-gradient(135deg, var(--brand), var(--brand-deep)); color: var(--on-brand);
     display: grid; place-items: center; font-size: 17px;
-    box-shadow: 0 8px 20px -10px var(--brand);
+    box-shadow: 0 6px 16px -9px color-mix(in srgb, var(--brand) 60%, transparent);
     transition: transform .16s, opacity .16s;
   }
   .send:hover:not(:disabled) { transform: scale(1.07); }
@@ -133,6 +133,7 @@
   .mic:hover { color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); }
   .mic.rec { color: var(--danger); animation: breathe 1.1s ease-in-out infinite; }
   .hint { text-align: center; font-size: 11px; color: var(--muted); margin-top: 9px; }
+  .len-row { display: flex; align-items: center; gap: 7px; margin: 0 4px 9px; }
 
   .banner {
     max-width: 840px; margin: 0 auto 14px; padding: 12px 16px; border-radius: 14px; font-size: 13px;
@@ -179,6 +180,10 @@
 <footer class="composer">
   <div class="composer-inner">
     <div id="banner"></div>
+    <div class="len-row">
+      <span class="seg-label">طول پاسخ:</span>
+      <div id="lenPick"></div>
+    </div>
     <div class="input-row">
       <button class="mic" id="micBtn" title="پرسش صوتی">🎙️</button>
       <textarea id="q" rows="1" placeholder="سوالت رو اینجا بنویس…" autocomplete="off"></textarea>
@@ -189,8 +194,8 @@
 </footer>
 
 <script type="module">
-import { $, md, api, toast, store, streamChat, initTheme, copyText, escapeHtml, openHistoryDrawer }
-  from '/assets/core.js';
+import { $, md, api, toast, store, streamChat, initTheme, copyText, escapeHtml, openHistoryDrawer,
+         mountLengthPicker } from '/assets/core.js';
 
 const stream = $('#stream');
 const heroTemplate = $('#hero').cloneNode(true);
@@ -269,6 +274,7 @@ async function ask(text) {
     message: question,
     session_id: store.session,
     client_id: store.client,
+    length: store.length,
   }, {
     sources: (e) => { sources = e.sources || []; },
     delta: (e) => {
@@ -378,6 +384,7 @@ $('#histBtn').addEventListener('click', () =>
   })
 );
 
+mountLengthPicker($('#lenPick'));
 await restoreConversation();
 
 /* ---------- ورودی صوتی ---------- */

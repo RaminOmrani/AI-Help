@@ -44,6 +44,7 @@ async def answer_stream(
     audience: str,
     model: str | None = None,
     client_id: str = "",
+    length: str = "normal",
 ) -> AsyncIterator[str]:
     """جریان پاسخ به صورت SSE — رویدادها: sources | delta | done | error"""
     started = time.time()
@@ -78,9 +79,10 @@ async def answer_stream(
     context = rag.build_context(hits)
     messages = [{"role": "system", "content": system}]
     messages.extend(history_messages(conv_id)[:-1] if conv_id else [])
-    messages.append(
-        {"role": "user", "content": prompts.user_turn(question, context, audience=audience)}
-    )
+    messages.append({
+        "role": "user",
+        "content": prompts.user_turn(question, context, audience=audience, length=length),
+    })
 
     collected: list[str] = []
     try:
@@ -88,6 +90,7 @@ async def answer_stream(
             messages,
             model=model,
             temperature=0.2 if audience == "internal" else 0.35,
+            max_tokens=prompts.max_tokens_for(length),
         ):
             collected.append(piece)
             yield _sse({"type": "delta", "text": piece})

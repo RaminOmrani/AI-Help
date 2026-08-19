@@ -49,8 +49,8 @@
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } }
   .msg.user .row {
     display: inline-block; max-width: 88%; padding: 11px 16px; border-radius: 16px;
-    background: linear-gradient(135deg, var(--brand), #8a5cff); color: #fff; font-size: 14px;
-    box-shadow: 0 10px 22px -14px var(--brand);
+    background: linear-gradient(135deg, var(--brand), var(--brand-deep)); color: var(--on-brand); font-size: 14px;
+    box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--brand) 60%, transparent);
   }
   .msg.user { text-align: left; }
   .msg.bot .row {
@@ -76,13 +76,14 @@
   @keyframes bounce { 0%,60%,100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
 
   .composer { flex: none; padding: 12px clamp(12px, 3vw, 26px) 16px; border-top: 1px solid var(--border); }
+  .len-row { max-width: 800px; margin: 0 auto 9px; display: flex; align-items: center; gap: 7px; }
   .input-row {
     max-width: 800px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px;
     background: var(--panel-solid); border: 1px solid var(--border); border-radius: 20px; padding: 6px 6px 6px 6px;
   }
   .input-row:focus-within { border-color: color-mix(in srgb, var(--brand) 55%, transparent); }
   #q { flex: 1; border: none; outline: none; background: none; resize: none; max-height: 150px; padding: 9px 12px; font-size: 14px; line-height: 1.75; }
-  .send { width: 38px; height: 38px; border-radius: 50%; flex: none; background: linear-gradient(135deg, var(--brand), #8a5cff); color: #fff; display: grid; place-items: center; }
+  .send { width: 38px; height: 38px; border-radius: 50%; flex: none; background: linear-gradient(135deg, var(--brand), var(--brand-deep)); color: var(--on-brand); display: grid; place-items: center; }
   .send:disabled { opacity: .4; }
 
   /* ---------- پنل منابع ---------- */
@@ -101,7 +102,7 @@
   }
   .source h5 { margin: 0 0 5px; font-size: 12.5px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
   .source .bar { height: 3px; border-radius: 9px; background: color-mix(in srgb, var(--muted) 22%, transparent); overflow: hidden; margin: 7px 0; }
-  .source .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-2)); }
+  .source .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--brand), var(--accent)); }
   .source p {
     margin: 0; color: var(--muted); line-height: 1.85; cursor: pointer;
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
@@ -160,6 +161,10 @@
         </div>
       </div>
       <div class="composer">
+        <div class="len-row">
+          <span class="seg-label">طول پاسخ:</span>
+          <div id="lenPick"></div>
+        </div>
         <div class="input-row">
           <textarea id="q" rows="1" placeholder="مثلاً: خطای اتصال به SQL چه دلایلی دارد؟"></textarea>
           <button class="send" id="sendBtn" disabled>↑</button>
@@ -185,7 +190,7 @@
 
 <script type="module">
 import { $, $$, md, api, toast, store, streamChat, initTheme, copyText, escapeHtml, faDigits,
-         setAuthScope, openHistoryDrawer } from '/assets/core.js';
+         setAuthScope, openHistoryDrawer, mountLengthPicker } from '/assets/core.js';
 
 setAuthScope('agent');
 initTheme('#themeBtn');
@@ -205,6 +210,7 @@ async function boot() {
       `${faDigits(s.ready || 0)} سند · ${faDigits(s.pages || 0)} صفحه · مدل ${data.model || '—'}`;
     if (data.welcome) $('#welcome').textContent = data.welcome;
     renderSuggestions(data.suggestions || []);
+    mountLengthPicker($('#lenPick'));
     await restoreConversation();
     $('#q').focus();
   } catch {
@@ -338,6 +344,7 @@ async function ask(text) {
     message: question,
     session_id: store.session,
     client_id: store.client,
+    length: store.length,
   }, {
     sources: (e) => { sources = e.sources || []; renderSources(sources, e.grounded); },
     delta: (e) => {
