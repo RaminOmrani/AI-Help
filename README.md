@@ -49,7 +49,21 @@
 
 از پنل [avalai.ir](https://avalai.ir) یک کلید بسازید (با `aa-` شروع می‌شود).
 
-### ۲. نصب و اجرا
+### ۲. گرفتن پروژه
+
+اگر Git دارید:
+
+```bash
+git clone -b claude/ai-support-assistant-grtf7b https://github.com/RaminOmrani/AI-Help
+cd AI-Help
+```
+
+اگر Git ندارید، از صفحه‌ی گیت‌هاب دکمه‌ی **Code ← Download ZIP** را بزنید و از حالت فشرده خارج کنید.
+
+### ۳. اجرا
+
+**ویندوز** — روی فایل `start.bat` دابل‌کلیک کنید. همین.
+(یا در cmd، از داخل پوشه‌ی پروژه: `start.bat`)
 
 **لینوکس / مک**
 
@@ -57,19 +71,20 @@
 ./start.sh
 ```
 
-**ویندوز**
+اسکریپت خودش محیط مجازی می‌سازد، وابستگی‌ها را نصب می‌کند، فایل `.env` را از روی نمونه
+می‌سازد و سرور را بالا می‌آورد. بار اول چند دقیقه طول می‌کشد. اگر پایتون نصب نباشد،
+پیام واضح می‌دهد و متوقف می‌شود.
 
-```bat
-start.bat
-```
+> ویندوز: هنگام نصب پایتون از [python.org](https://www.python.org/downloads/) حتماً تیک
+> **«Add python.exe to PATH»** را بزنید، وگرنه `start.bat` پایتون را پیدا نمی‌کند.
 
-**دستی**
+**اجرای دستی** (اگر خواستید مرحله‌به‌مرحله جلو بروید):
 
 ```bash
 python -m venv venv
 source venv/bin/activate        # ویندوز: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env            # کلید را داخلش بگذارید
+copy .env.example .env          # لینوکس/مک: cp .env.example .env
 python run.py
 ```
 
@@ -81,7 +96,7 @@ python run.py
 | `http://localhost:8000/agent` | کنسول پشتیبان (رمز: `AGENT_PASSWORD`) |
 | `http://localhost:8000/admin` | پنل مدیریت (رمز: `ADMIN_PASSWORD`) |
 
-### ۳. وارد کردن کلید — دو راه
+### ۴. وارد کردن کلید — دو راه
 
 **راه ساده (بدون دست زدن به فایل):** وارد `http://localhost:8000/admin` شوید و در تب
 **«🔑 کلید و مدل‌ها»** کلید AvalAI را بگذارید و ذخیره کنید. همان‌جا دکمه‌ی **«🔌 تست اتصال»**
@@ -104,7 +119,7 @@ AVALAI_API_KEY=aa-xxxxxxxxxxxxxxxx
 > AGENT_PASSWORD=رمز-کارشناس
 > ```
 
-### ۴. تست اتصال از ترمینال
+### ۵. تست اتصال از ترمینال
 
 همان تست‌های پنل، از خط فرمان:
 
@@ -136,7 +151,7 @@ python scripts/compare_models.py --audience internal --ask "خطای اتصال 
 (`flash` / `mini` / `haiku`) تقریباً همیشه کافی است. اگر پاسخ‌ها غلط بودند، معمولاً مشکل از
 کیفیت مستندات است نه از مدل.
 
-### ۵. بارگذاری راهنماها
+### ۶. بارگذاری راهنماها
 
 به `http://localhost:8000/admin` بروید، وارد شوید و فایل‌ها را روی کادر بارگذاری بکشید.
 اگر فایل‌ها از قبل در پوشه‌ی `docs/` هستند، دکمه‌ی **«وارد کردن پوشه‌ی docs»** همه را یک‌جا اضافه می‌کند.

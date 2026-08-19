@@ -93,3 +93,5 @@ SUPPORT_HOURS = _env("SUPPORT_HOURS", "شنبه تا چهارشنبه، ۹ تا 
 
 HOST = _env("HOST", "0.0.0.0")
 PORT = _env_int("PORT", 8000)
+# باز کردن خودکار مرورگر — فقط برای اجرای روی کامپیوتر شخصی
+OPEN_BROWSER = _env("OPEN_BROWSER", "false").lower() in {"1", "true", "yes", "on"}
