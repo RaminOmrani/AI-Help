@@ -6,7 +6,7 @@ import json
 import time
 from typing import AsyncIterator
 
-from . import avalai, db, prompts, rag
+from . import avalai, config, db, prompts, rag
 
 HISTORY_TURNS = 6
 
@@ -92,12 +92,14 @@ async def answer_stream(
     })
 
     collected: list[str] = []
+    stream_meta: dict = {}
     try:
         async for piece in avalai.chat_stream(
             messages,
             model=model,
             temperature=0.2 if audience == "internal" else 0.35,
-            max_tokens=prompts.max_tokens_for(length),
+            max_tokens=config.ANSWER_MAX_TOKENS,
+            meta=stream_meta,
         ):
             collected.append(piece)
             yield _sse({"type": "delta", "text": piece})
@@ -109,6 +111,13 @@ async def answer_stream(
         return
 
     answer = "".join(collected).strip()
+
+    # اگر پاسخ به سقف توکن خورده باشد، نیمه‌کاره است — بی‌صدا نگذاریمش
+    if stream_meta.get("finish_reason") == "length":
+        note = "\n\n⚠️ پاسخ به سقف طول رسید و ناقص ماند. سوال را ریزتر بپرسید یا دوباره بفرستید."
+        answer += note
+        yield _sse({"type": "delta", "text": note})
+
     if not answer:
         yield _sse({"type": "error", "message": "پاسخی از مدل دریافت نشد. دوباره تلاش کنید."})
         return

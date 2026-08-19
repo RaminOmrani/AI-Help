@@ -26,7 +26,7 @@ os.environ['AVALAI_API_KEY'] = 'aa-fake-key-for-testing'
 
 from app import avalai, config, db, rag, chat_service, repair, vision  # noqa: E402
 
-calls = {"chat": 0, "embed": 0, "stream": 0, "vision": 0, "image_bytes": []}
+calls = {"chat": 0, "embed": 0, "stream": 0, "vision": 0, "image_bytes": [], "max_tokens": None}
 
 
 def fake_vector(text, dim=64):
@@ -62,12 +62,16 @@ async def fake_chat(messages, model=None, temperature=0.0, max_tokens=None):
     return "پاسخ ساختگی"
 
 
-async def fake_stream(messages, model=None, temperature=0.0, max_tokens=None):
+async def fake_stream(messages, model=None, temperature=0.0, max_tokens=None, meta=None):
     calls["stream"] += 1
     context = messages[-1]["content"]
     assert "### مستندات" in context, "بلوک مستندات به مدل نرسید"
+    assert "کامل تمام کن" in context, "دستور «پاسخ را کامل تمام کن» به مدل نرسید"
+    calls["max_tokens"] = max_tokens
     for piece in ["۱. ", "منوی فروش ", "را باز کنید.\n", "۲. دکمه‌ی جدید را بزنید."]:
         yield piece
+    if meta is not None:
+        meta["finish_reason"] = "stop"
 
 
 avalai.embed = fake_embed
@@ -156,6 +160,50 @@ async def main():
     _, skipped = await repair.repair_pages([clean])
     assert skipped == 0, "متن سالم بی‌دلیل به مدل فرستاده شد"
     print("✅ بازسازی متن فقط روی صفحه‌های شکسته اجرا می‌شود")
+
+    # ---- طول پاسخ: همان سقف برای همه، دستور از پرامپت می‌آید ----
+    from app import config as app_config
+
+    markers = {"short": "حالت کوتاه", "normal": "حالت متوسط", "detailed": "حالت کامل"}
+    for mode, marker in markers.items():
+        seen_prompt = {}
+
+        async def capture(messages, model=None, temperature=0.0, max_tokens=None, meta=None,
+                          _seen=seen_prompt):
+            _seen["prompt"] = messages[-1]["content"]
+            _seen["max_tokens"] = max_tokens
+            yield "پاسخ"
+            if meta is not None:
+                meta["finish_reason"] = "stop"
+
+        chat_service.avalai.chat_stream = capture
+        async for _ in chat_service.answer_stream(
+            "تست طول", session_id=f"len-{mode}", audience="public", length=mode
+        ):
+            pass
+        assert marker in seen_prompt["prompt"], f"دستور «{marker}» به مدل نرسید"
+        assert seen_prompt["max_tokens"] == app_config.ANSWER_MAX_TOKENS, \
+            f"سقف توکن برای حالت {mode} فرق دارد — پاسخ ممکن است بریده شود"
+    chat_service.avalai.chat_stream = fake_stream
+    print(f"✅ هر سه حالت طول یک سقف توکن دارند ({app_config.ANSWER_MAX_TOKENS}) و دستورشان از پرامپت می‌آید")
+
+    # ---- پاسخ نیمه‌کاره باید اعلام شود ----
+    async def truncated(messages, model=None, temperature=0.0, max_tokens=None, meta=None):
+        yield "جواب ناقصِ ب"
+        if meta is not None:
+            meta["finish_reason"] = "length"
+
+    chat_service.avalai.chat_stream = truncated
+    text = ""
+    async for raw in chat_service.answer_stream(
+        "تست قطع", session_id="cut", audience="public", length="short"
+    ):
+        event = json.loads(raw[5:])
+        if event["type"] == "delta":
+            text += event["text"]
+    assert "ناقص ماند" in text, "پاسخ بریده‌شده بی‌صدا رد شد"
+    chat_service.avalai.chat_stream = fake_stream
+    print("✅ پاسخ بریده‌شده به کاربر اعلام می‌شود")
 
     # ---- خواندن تصویری صفحه‌های PDF ----
     guide = next(

@@ -82,9 +82,14 @@ async def chat_stream(
     *,
     model: str | None = None,
     temperature: float = 0.25,
-    max_tokens: int = 1600,
+    max_tokens: int = 4000,
+    meta: dict | None = None,
 ) -> AsyncIterator[str]:
-    """پاسخ مدل را به صورت توکن‌به‌توکن برمی‌گرداند."""
+    """پاسخ مدل را توکن‌به‌توکن برمی‌گرداند.
+
+    اگر `meta` داده شود، دلیل پایان پاسخ در کلید `finish_reason` نوشته می‌شود
+    تا بشود فهمید پاسخ کامل تمام شده یا به سقف توکن خورده است.
+    """
     payload = {
         "model": model or settings.chat_model(),
         "messages": messages,
@@ -113,6 +118,8 @@ async def chat_stream(
                 choices = chunk.get("choices") or []
                 if not choices:
                     continue
+                if meta is not None and choices[0].get("finish_reason"):
+                    meta["finish_reason"] = choices[0]["finish_reason"]
                 delta = choices[0].get("delta") or {}
                 piece = delta.get("content")
                 if piece:
