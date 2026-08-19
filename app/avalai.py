@@ -10,7 +10,7 @@ from typing import Any, AsyncIterator
 
 import httpx
 
-from . import config
+from . import config, settings
 
 
 class AvalAIError(RuntimeError):
@@ -18,12 +18,14 @@ class AvalAIError(RuntimeError):
 
 
 def _headers() -> dict[str, str]:
-    if not config.AVALAI_API_KEY:
+    key = settings.api_key()
+    if not key:
         raise AvalAIError(
-            "کلید AVALAI_API_KEY تنظیم نشده است. آن را از avalai.ir بگیرید و در فایل \u200e.env\u200e پروژه قرار دهید."
+            "کلید AvalAI تنظیم نشده است. آن را از avalai.ir بگیرید و در پنل مدیریت ← "
+            "تنظیمات ← «کلید و مدل‌ها» وارد کنید (یا در فایل \u200e.env\u200e پروژه)."
         )
     return {
-        "Authorization": f"Bearer {config.AVALAI_API_KEY}",
+        "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
     }
 
@@ -63,7 +65,7 @@ async def chat_stream(
 ) -> AsyncIterator[str]:
     """پاسخ مدل را به صورت توکن‌به‌توکن برمی‌گرداند."""
     payload = {
-        "model": model or config.CHAT_MODEL,
+        "model": model or settings.chat_model(),
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
@@ -105,7 +107,7 @@ async def chat(
 ) -> str:
     """پاسخ کامل (بدون استریم) — برای کارهای داخلی مثل بازنویسی لحن."""
     payload = {
-        "model": model or config.FAST_MODEL,
+        "model": model or settings.fast_model(),
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
@@ -128,7 +130,7 @@ async def chat(
 async def embed(texts: list[str], *, model: str | None = None) -> list[list[float]]:
     if not texts:
         return []
-    payload = {"model": model or config.EMBEDDING_MODEL, "input": texts}
+    payload = {"model": model or settings.embedding_model(), "input": texts}
     url = f"{config.AVALAI_BASE_URL}/embeddings"
     async with httpx.AsyncClient(timeout=config.REQUEST_TIMEOUT) as client:
         resp = await client.post(url, headers=_headers(), json=payload)

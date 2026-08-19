@@ -15,7 +15,7 @@ import base64
 import re
 from pathlib import Path
 
-from . import avalai, config
+from . import avalai, config, settings
 
 VISION_SYSTEM = """تو یک ابزار تبدیل صفحه‌ی راهنمای نرم‌افزار به متن هستی.
 تصویر یک صفحه از راهنمای فارسیِ یک نرم‌افزار حسابداری/فروشگاهی را می‌بینی؛
@@ -122,7 +122,7 @@ async def _read_page(
                         ],
                     },
                 ],
-                model=config.VISION_MODEL,
+                model=settings.vision_model(),
                 temperature=0.0,
                 max_tokens=4000,
             )
@@ -147,7 +147,7 @@ async def read_pages(
 
     خروجی: (صفحه‌های به‌روزشده، شماره‌ی صفحه‌هایی که با تصویر خوانده شدند)
     """
-    if not config.AVALAI_API_KEY or not config.VISION_ENABLED:
+    if not settings.api_key() or not settings.vision_enabled():
         return pages, []
 
     targets = await asyncio.to_thread(pages_with_images, pdf_path)

@@ -51,6 +51,7 @@ CREATE INDEX IF NOT EXISTS idx_chunks_doc ON chunks(doc_id);
 CREATE TABLE IF NOT EXISTS conversations (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,
+    client_id  TEXT DEFAULT '',                   -- شناسه‌ی پایدار مرورگر، برای فهرست سابقه
     audience   TEXT NOT NULL DEFAULT 'public',    -- public (مشتری) | internal (پشتیبان)
     title      TEXT DEFAULT '',
     created_at TEXT DEFAULT (datetime('now'))
@@ -132,9 +133,16 @@ def get_conn():
 MIGRATIONS = [
     ("documents", "repaired", "INTEGER DEFAULT 0"),
     ("documents", "vision_pages", "INTEGER DEFAULT 0"),
+    ("conversations", "client_id", "TEXT DEFAULT ''"),
     ("documents", "ai_repair", "INTEGER DEFAULT 1"),
     ("documents", "progress", "TEXT DEFAULT ''"),
 ]
+
+
+# ایندکس‌هایی که به ستون‌های افزوده‌شده در مهاجرت وابسته‌اند
+POST_MIGRATION_SCHEMA = """
+CREATE INDEX IF NOT EXISTS idx_conv_client ON conversations(client_id, audience);
+"""
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
@@ -149,6 +157,7 @@ def init_db() -> None:
     with _lock, get_conn() as conn:
         conn.executescript(SCHEMA)
         _migrate(conn)
+        conn.executescript(POST_MIGRATION_SCHEMA)
         for key, value in DEFAULT_SETTINGS.items():
             conn.execute(
                 "INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)", (key, value)

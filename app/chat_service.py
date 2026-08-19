@@ -11,7 +11,7 @@ from . import avalai, db, prompts, rag
 HISTORY_TURNS = 6
 
 
-def get_or_create_conversation(session_id: str, audience: str) -> int:
+def get_or_create_conversation(session_id: str, audience: str, client_id: str = "") -> int:
     row = db.query_one(
         "SELECT id FROM conversations WHERE session_id = ? AND audience = ? "
         "ORDER BY id DESC LIMIT 1",
@@ -20,8 +20,8 @@ def get_or_create_conversation(session_id: str, audience: str) -> int:
     if row:
         return row["id"]
     return db.execute(
-        "INSERT INTO conversations(session_id, audience) VALUES (?, ?)",
-        (session_id, audience),
+        "INSERT INTO conversations(session_id, client_id, audience) VALUES (?, ?, ?)",
+        (session_id, client_id, audience),
     )
 
 
@@ -43,10 +43,11 @@ async def answer_stream(
     session_id: str,
     audience: str,
     model: str | None = None,
+    client_id: str = "",
 ) -> AsyncIterator[str]:
     """جریان پاسخ به صورت SSE — رویدادها: sources | delta | done | error"""
     started = time.time()
-    conv_id = get_or_create_conversation(session_id, audience)
+    conv_id = get_or_create_conversation(session_id, audience, client_id)
     db.execute(
         "INSERT INTO messages(conv_id, role, content) VALUES (?, 'user', ?)",
         (conv_id, question),
@@ -131,3 +132,61 @@ async def answer_stream(
             "grounded": grounded,
         }
     )
+
+
+# ------------------------------------------------------------------
+# سابقه‌ی گفتگو برای رابط کاربری
+# ------------------------------------------------------------------
+def conversation_messages(session_id: str, audience: str) -> list[dict]:
+    """پیام‌های گفتگوی جاری، برای بازگرداندن بعد از رفرش صفحه."""
+    conv = db.query_one(
+        "SELECT id FROM conversations WHERE session_id = ? AND audience = ? "
+        "ORDER BY id DESC LIMIT 1",
+        (session_id, audience),
+    )
+    if not conv:
+        return []
+
+    rows = db.query(
+        "SELECT id, role, content, sources, grounded, feedback "
+        "FROM messages WHERE conv_id = ? ORDER BY id",
+        (conv["id"],),
+    )
+    messages = []
+    for row in rows:
+        try:
+            sources = json.loads(row["sources"] or "[]")
+        except json.JSONDecodeError:
+            sources = []
+        if audience == "public":
+            seen, trimmed = set(), []
+            for source in sources:
+                if source.get("title") in seen:
+                    continue
+                seen.add(source.get("title"))
+                trimmed.append({"title": source.get("title"), "id": source.get("id")})
+            sources = trimmed
+        messages.append({
+            "id": row["id"],
+            "role": row["role"],
+            "content": row["content"],
+            "sources": sources,
+            "grounded": bool(row["grounded"]),
+            "feedback": row["feedback"],
+        })
+    return messages
+
+
+def recent_conversations(client_id: str, audience: str, limit: int = 30) -> list[dict]:
+    """فهرست گفتگوهای قبلیِ همین مرورگر."""
+    if not client_id:
+        return []
+    rows = db.query(
+        "SELECT c.session_id, c.title, c.created_at, "
+        "(SELECT COUNT(*) FROM messages m WHERE m.conv_id = c.id) AS turns "
+        "FROM conversations c "
+        "WHERE c.client_id = ? AND c.audience = ? "
+        "ORDER BY c.id DESC LIMIT ?",
+        (client_id, audience, min(limit, 100)),
+    )
+    return [dict(r) for r in rows if r["turns"] > 0]

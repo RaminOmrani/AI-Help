@@ -140,6 +140,7 @@
       </div>
     </div>
     <div class="spacer"></div>
+    <button class="icon-btn" id="histBtn" title="گفتگوهای قبلی">🕘</button>
     <button class="icon-btn" id="themeBtn">🌙</button>
     <button class="btn btn-sm" id="newBtn">✨ گفتگوی جدید</button>
     <a class="btn btn-sm btn-ghost" href="/admin">پنل مدیریت</a>
@@ -183,7 +184,8 @@
 </div>
 
 <script type="module">
-import { $, $$, md, api, toast, store, streamChat, initTheme, copyText, escapeHtml, faDigits , setAuthScope } from '/assets/core.js';
+import { $, $$, md, api, toast, store, streamChat, initTheme, copyText, escapeHtml, faDigits,
+         setAuthScope, openHistoryDrawer } from '/assets/core.js';
 
 setAuthScope('agent');
 initTheme('#themeBtn');
@@ -203,6 +205,7 @@ async function boot() {
       `${faDigits(s.ready || 0)} سند · ${faDigits(s.pages || 0)} صفحه · مدل ${data.model || '—'}`;
     if (data.welcome) $('#welcome').textContent = data.welcome;
     renderSuggestions(data.suggestions || []);
+    await restoreConversation();
     $('#q').focus();
   } catch {
     showLogin();
@@ -223,9 +226,65 @@ async function doLogin() {
   } catch (err) { toast(err.message, 'err'); }
 }
 $('#outBtn').addEventListener('click', () => { store.token = ''; location.reload(); });
-$('#newBtn').addEventListener('click', () => { store.newSession(); location.reload(); });
 
+/* ---------- سابقه‌ی گفتگو ---------- */
+async function restoreConversation() {
+  let messages = [];
+  try {
+    messages = (await api(`/api/agent/history?session_id=${encodeURIComponent(store.session)}`,
+                          { auth: true })).messages;
+  } catch { return; }
+  if (!messages.length) return;
+
+  $('#empty')?.remove();
+  let lastSources = [];
+  for (const m of messages) {
+    if (m.role === 'user') { addUser(m.content); continue; }
+    const el = addBot();
+    el.querySelector('.md').innerHTML = md(m.content);
+    const actions = el.querySelector('.actions');
+    actions.hidden = false;
+    actions.innerHTML = '<button data-a="copy">📋 کپی</button>'
+      + '<button data-a="rewrite">💬 بازنویسی برای مشتری</button>';
+    actions.querySelector('[data-a="copy"]').onclick = () => copyText(m.content);
+    actions.querySelector('[data-a="rewrite"]').onclick = (ev) => rewrite(m.content, ev.currentTarget);
+    lastSources = m.sources || [];
+  }
+  renderSources(lastSources, true);
+  scroll();
+}
+
+function startFresh() {
+  store.newSession();
+  stream.replaceChildren(emptyTemplate.cloneNode(true));
+  renderSuggestions(suggestions);
+  renderSources([], true);
+  input.focus();
+}
+
+$('#newBtn').addEventListener('click', startFresh);
+
+$('#histBtn').addEventListener('click', () =>
+  openHistoryDrawer({
+    load: async () =>
+      (await api(`/api/agent/conversations?client_id=${encodeURIComponent(store.client)}`,
+                 { auth: true })).conversations,
+    open: async (sessionId) => {
+      store.useSession(sessionId);
+      stream.replaceChildren();
+      await restoreConversation();
+      if (!stream.children.length) startFresh();
+    },
+    remove: (sessionId) =>
+      api(`/api/agent/conversations/${encodeURIComponent(sessionId)}?client_id=${encodeURIComponent(store.client)}`,
+          { method: 'DELETE', auth: true }),
+    fresh: startFresh,
+  })
+);
+
+let suggestions = [];
 function renderSuggestions(list) {
+  suggestions = list;
   $('#qgrid').innerHTML = list
     .map((s) => `<button data-q="${escapeHtml(s)}">${escapeHtml(s)}</button>`)
     .join('');
@@ -234,6 +293,7 @@ function renderSuggestions(list) {
 
 /* ---------- گفتگو ---------- */
 const stream = $('#stream'), scrollEl = $('#scroll'), input = $('#q'), sendBtn = $('#sendBtn');
+const emptyTemplate = $('#empty').cloneNode(true);
 const scroll = () => { scrollEl.scrollTop = scrollEl.scrollHeight; };
 
 function addUser(text) {
@@ -274,7 +334,11 @@ async function ask(text) {
 
   let answer = '', first = true, sources = [];
 
-  await streamChat('/api/agent/chat', { message: question, session_id: store.session }, {
+  await streamChat('/api/agent/chat', {
+    message: question,
+    session_id: store.session,
+    client_id: store.client,
+  }, {
     sources: (e) => { sources = e.sources || []; renderSources(sources, e.grounded); },
     delta: (e) => {
       if (first) { body.innerHTML = ''; first = false; }

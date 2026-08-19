@@ -108,6 +108,7 @@
     <button data-tab="chats">💬 گفتگوها</button>
     <button data-tab="tickets">🎫 تیکت‌ها</button>
     <button data-tab="gaps">🕳 خلأهای دانش</button>
+    <button data-tab="ai">🔑 کلید و مدل‌ها</button>
     <button data-tab="settings">⚙️ تنظیمات</button>
   </div>
 
@@ -170,6 +171,60 @@
     <div id="gaps"></div>
   </section>
 
+  <!-- ---------- کلید و مدل‌ها ---------- -->
+  <section class="tab" id="tab-ai">
+    <div class="card" style="padding:22px;margin-bottom:16px">
+      <div class="settings-grid">
+        <div>
+          <label>کلید AvalAI</label>
+          <input class="field" id="ai_key" style="width:100%;direction:ltr;text-align:left"
+                 placeholder="aa-xxxxxxxxxxxxxxxx" autocomplete="off">
+          <p class="muted tiny" id="keyNote" style="margin:6px 0 0"></p>
+        </div>
+
+        <div style="display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))">
+          <div>
+            <label>مدل پاسخ‌دهی</label>
+            <input class="field" id="ai_chat" style="width:100%;direction:ltr;text-align:left">
+            <p class="muted tiny" style="margin:5px 0 0">جواب دادن به سوال‌ها</p>
+          </div>
+          <div>
+            <label>مدل بینایی</label>
+            <input class="field" id="ai_vision" style="width:100%;direction:ltr;text-align:left">
+            <p class="muted tiny" style="margin:5px 0 0">خواندن اسکرین‌شات‌های داخل PDF</p>
+          </div>
+          <div>
+            <label>مدل سبک</label>
+            <input class="field" id="ai_fast" style="width:100%;direction:ltr;text-align:left">
+            <p class="muted tiny" style="margin:5px 0 0">بازسازی متن و بازنویسی لحن</p>
+          </div>
+          <div>
+            <label>مدل بردارسازی</label>
+            <input class="field" id="ai_embed" style="width:100%;direction:ltr;text-align:left">
+            <p class="muted tiny" style="margin:5px 0 0">جستجوی معنایی در مستندات</p>
+          </div>
+        </div>
+
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500">
+          <input type="checkbox" id="ai_vision_on"> خواندن اسکرین‌شات‌های داخل PDF فعال باشد
+        </label>
+
+        <div style="display:flex;gap:9px;flex-wrap:wrap">
+          <button class="btn btn-primary" id="aiSave">ذخیره</button>
+          <button class="btn" id="aiTest">🔌 تست اتصال</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="aiResults"></div>
+
+    <p class="muted tiny">
+      💡 این مقادیر در دیتابیس ذخیره می‌شوند و بر فایل <code dir="ltr">.env</code> اولویت دارند.
+      برای برگرداندن کلید به حالت <code dir="ltr">.env</code>، در کادر کلید فقط یک خط تیره
+      <code dir="ltr">-</code> بگذارید و ذخیره کنید.
+    </p>
+  </section>
+
   <!-- ---------- تنظیمات ---------- -->
   <section class="tab" id="tab-settings">
     <div class="card" style="padding:22px">
@@ -217,6 +272,7 @@ async function boot() {
     loadTickets();
     loadGaps();
     loadSettings();
+    loadAiSettings();
   } catch { showLogin(); }
 }
 function showLogin() { login.hidden = false; app.hidden = true; $('#pw').focus(); }
@@ -250,7 +306,7 @@ async function refreshStats() {
     `<div class="card stat" id="creditCard"><b>—</b><span>اعتبار AvalAI</span></div>`;
 
   if (!data.api_key_set) {
-    toast('کلید AVALAI_API_KEY تنظیم نشده — پاسخ‌دهی کار نمی‌کند.', 'err');
+    toast('کلید AvalAI ثبت نشده — از تب «کلید و مدل‌ها» واردش کنید.', 'err');
   } else {
     loadCredit();
   }
@@ -460,6 +516,65 @@ async function loadGaps() {
       </div>`).join('')
     : '<p class="muted tiny">فعلاً خلأی ثبت نشده — یعنی مستندات جواب همه را داده‌اند 🎉</p>';
 }
+
+/* ---------- کلید و مدل‌ها ---------- */
+async function loadAiSettings() {
+  const a = await api('/api/admin/ai-settings', { auth: true });
+  $('#ai_key').value = '';
+  $('#ai_key').placeholder = a.api_key_masked || 'aa-xxxxxxxxxxxxxxxx';
+  $('#ai_chat').value = a.chat_model;
+  $('#ai_vision').value = a.vision_model;
+  $('#ai_fast').value = a.fast_model;
+  $('#ai_embed').value = a.embedding_model;
+  $('#ai_vision_on').checked = a.vision_enabled;
+  $('#keyNote').textContent = !a.api_key_set
+    ? 'هنوز کلیدی ثبت نشده — بدون آن هیچ پاسخی داده نمی‌شود.'
+    : a.api_key_from_env
+      ? 'کلید فعلی از فایل .env خوانده می‌شود. اگر اینجا کلید بگذارید، جایگزین می‌شود.'
+      : 'کلید در پنل ثبت شده است. برای تغییر، کلید جدید را وارد کنید.';
+}
+
+$('#aiSave').addEventListener('click', async () => {
+  try {
+    await api('/api/admin/ai-settings', {
+      method: 'PUT', auth: true,
+      body: {
+        avalai_api_key: $('#ai_key').value,
+        chat_model: $('#ai_chat').value,
+        vision_model: $('#ai_vision').value,
+        fast_model: $('#ai_fast').value,
+        embedding_model: $('#ai_embed').value,
+        vision_enabled: $('#ai_vision_on').checked,
+      },
+    });
+    toast('ذخیره شد ✓', 'ok');
+    await loadAiSettings();
+    refreshStats();
+  } catch (err) { toast(err.message, 'err'); }
+});
+
+$('#aiTest').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> در حال تست…';
+  $('#aiResults').innerHTML = '';
+  try {
+    const res = await api('/api/admin/ai-test', { method: 'POST', auth: true });
+    $('#aiResults').innerHTML = res.checks.map((c) => `
+      <div class="list-item" style="border-color:${c.ok
+        ? 'color-mix(in srgb, var(--ok) 40%, transparent)'
+        : 'color-mix(in srgb, var(--danger) 45%, transparent)'}">
+        <h5>${c.ok ? '✅' : '❌'} ${escapeHtml(c.name)}</h5>
+        ${c.detail ? `<div class="muted tiny" style="direction:ltr;text-align:left;white-space:pre-wrap">${escapeHtml(c.detail)}</div>` : ''}
+        ${c.hint ? `<div class="tiny" style="margin-top:5px;color:var(--warn)">${escapeHtml(c.hint)}</div>` : ''}
+      </div>`).join('');
+  } catch (err) {
+    toast(err.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔌 تست اتصال';
+  }
+});
 
 /* ---------- تنظیمات ---------- */
 async function loadSettings() {

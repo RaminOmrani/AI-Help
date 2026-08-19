@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import avalai, config, db
+from . import avalai, config, db, settings
 from .ingest import chunk_pages, checksum, extract_pages
 from .repair import repair_pages
 from .vision import read_pages
@@ -60,7 +60,7 @@ async def index_document(doc_id: int) -> dict:
     vision_pages: list[int] = []
     is_pdf = path.suffix.lower() == ".pdf"  # فقط PDF متن شکسته و اسکرین‌شات دارد
 
-    if row["ai_repair"] and is_pdf and config.AVALAI_API_KEY:
+    if row["ai_repair"] and is_pdf and settings.api_key():
         # ۱) صفحه‌های عکس‌دار: تصویر صفحه به مدل بینایی می‌رود
         def on_vision(done: int, total: int) -> None:
             _progress(doc_id, f"خواندن تصویر صفحه‌ها ({done} از {total})…")
@@ -135,7 +135,7 @@ async def _embed_document(doc_id: int) -> bool:
     rows = db.query("SELECT id, text FROM chunks WHERE doc_id = ? ORDER BY id", (doc_id,))
     if not rows:
         return False
-    if not config.AVALAI_API_KEY:
+    if not settings.api_key():
         return False
 
     batch = config.EMBED_BATCH
@@ -313,7 +313,7 @@ async def search(
     lexical = _lexical_scores(query, rows, df)
     semantic = np.zeros(len(rows), dtype=np.float32)
 
-    if matrix is not None and config.AVALAI_API_KEY:
+    if matrix is not None and settings.api_key():
         try:
             vectors = await avalai.embed([query])
             if vectors:

@@ -159,6 +159,7 @@
     </div>
   </div>
   <div class="spacer"></div>
+  <button class="icon-btn" id="histBtn" title="گفتگوهای قبلی">🕘</button>
   <button class="icon-btn" id="themeBtn" title="تغییر تم">🌙</button>
   <button class="icon-btn" id="newBtn" title="گفتگوی جدید">✨</button>
   <button class="btn btn-sm" id="humanBtn">👤 کارشناس انسانی</button>
@@ -188,10 +189,11 @@
 </footer>
 
 <script type="module">
-import { $, md, api, toast, store, streamChat, initTheme, copyText, escapeHtml } from '/assets/core.js';
+import { $, md, api, toast, store, streamChat, initTheme, copyText, escapeHtml, openHistoryDrawer }
+  from '/assets/core.js';
 
 const stream = $('#stream');
-const hero   = $('#hero');
+const heroTemplate = $('#hero').cloneNode(true);
 const input  = $('#q');
 const sendBtn = $('#sendBtn');
 let busy = false;
@@ -228,7 +230,7 @@ function renderChips(list) {
 
 /* ---------- ساخت پیام ---------- */
 function addMessage(role, html) {
-  hero?.remove();
+  $('#hero')?.remove();
   const el = document.createElement('div');
   el.className = `msg ${role}`;
   el.innerHTML =
@@ -263,7 +265,11 @@ async function ask(text) {
   let first = true;
   let sources = [];
 
-  await streamChat('/api/chat', { message: question, session_id: store.session }, {
+  await streamChat('/api/chat', {
+    message: question,
+    session_id: store.session,
+    client_id: store.client,
+  }, {
     sources: (e) => { sources = e.sources || []; },
     delta: (e) => {
       if (first) { body.innerHTML = ''; first = false; }
@@ -322,10 +328,57 @@ input.addEventListener('keydown', (e) => {
 });
 sendBtn.addEventListener('click', () => ask());
 
-$('#newBtn').addEventListener('click', () => {
+/* ---------- سابقه‌ی گفتگو ---------- */
+async function restoreConversation() {
+  let messages = [];
+  try {
+    messages = (await api(`/api/history?session_id=${encodeURIComponent(store.session)}`)).messages;
+  } catch { return; }
+  if (!messages.length) return;
+
+  $('#hero')?.remove();
+  for (const m of messages) {
+    const el = addMessage(m.role === 'user' ? 'user' : 'bot', md(m.content));
+    if (m.role !== 'assistant') continue;
+    const meta = el.querySelector('.meta');
+    renderMeta(meta, m.id, m.content, m.sources || [], m.grounded);
+    if (m.feedback) {
+      const act = m.feedback > 0 ? 'up' : 'down';
+      meta.querySelector(`[data-act="${act}"]`)?.classList.add('active');
+    }
+  }
+  scroll();
+}
+
+function startFresh() {
   store.newSession();
-  location.reload();
-});
+  stream.replaceChildren(heroTemplate.cloneNode(true));
+  renderChips(info.suggestions || []);
+  input.focus();
+}
+
+async function openConversation(sessionId) {
+  store.useSession(sessionId);
+  stream.replaceChildren();
+  await restoreConversation();
+  if (!stream.children.length) startFresh();
+}
+
+$('#newBtn').addEventListener('click', startFresh);
+
+$('#histBtn').addEventListener('click', () =>
+  openHistoryDrawer({
+    load: async () =>
+      (await api(`/api/conversations?client_id=${encodeURIComponent(store.client)}`)).conversations,
+    open: openConversation,
+    remove: (sessionId) =>
+      api(`/api/conversations/${encodeURIComponent(sessionId)}?client_id=${encodeURIComponent(store.client)}`,
+          { method: 'DELETE' }),
+    fresh: startFresh,
+  })
+);
+
+await restoreConversation();
 
 /* ---------- ورودی صوتی ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;

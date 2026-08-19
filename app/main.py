@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import avalai, chat_service, config, db, ingest, prompts, rag, security
+from . import avalai, chat_service, config, db, diagnostics, ingest, prompts, rag, security, settings
 
 app = FastAPI(title="Support AI — AvalAI", version="3.0")
 app.add_middleware(
@@ -39,6 +39,7 @@ async def startup() -> None:
 class ChatIn(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
     session_id: str = Field(default="anonymous", max_length=64)
+    client_id: str = Field(default="", max_length=64)
     model: str | None = None
 
 
@@ -75,6 +76,15 @@ class SettingsIn(BaseModel):
     values: dict[str, str]
 
 
+class AISettingsIn(BaseModel):
+    avalai_api_key: str | None = None
+    chat_model: str | None = None
+    fast_model: str | None = None
+    vision_model: str | None = None
+    embedding_model: str | None = None
+    vision_enabled: bool | None = None
+
+
 # ==================================================================
 # عمومی (مشتری)
 # ==================================================================
@@ -106,10 +116,42 @@ async def customer_chat(payload: ChatIn):
             payload.message.strip(),
             session_id=payload.session_id,
             audience="public",
+            client_id=payload.client_id,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+def _delete_conversation(session_id: str, client_id: str, audience: str) -> bool:
+    row = db.query_one(
+        "SELECT id FROM conversations WHERE session_id = ? AND client_id = ? AND audience = ?",
+        (session_id, client_id, audience),
+    )
+    if not row:
+        return False
+    db.execute("DELETE FROM messages WHERE conv_id = ?", (row["id"],))
+    db.execute("DELETE FROM conversations WHERE id = ?", (row["id"],))
+    return True
+
+
+@app.get("/api/history")
+async def customer_history(session_id: str):
+    """پیام‌های گفتگوی جاری — تا با رفرش صفحه از دست نروند."""
+    return {"messages": chat_service.conversation_messages(session_id, "public")}
+
+
+@app.get("/api/conversations")
+async def customer_conversations(client_id: str):
+    """فهرست گفتگوهای قبلیِ همین مرورگر."""
+    return {"conversations": chat_service.recent_conversations(client_id, "public")}
+
+
+@app.delete("/api/conversations/{session_id}")
+async def delete_customer_conversation(session_id: str, client_id: str):
+    if not _delete_conversation(session_id, client_id, "public"):
+        raise HTTPException(status_code=404, detail="گفتگو پیدا نشد.")
+    return {"ok": True}
 
 
 @app.post("/api/feedback")
@@ -161,7 +203,7 @@ async def agent_bootstrap(role: str = Depends(security.require_staff)):
         "brand": config.BRAND_NAME,
         "welcome": db.get_setting("welcome_agent", ""),
         "suggestions": _suggestions("agent_suggestions"),
-        "model": config.CHAT_MODEL,
+        "model": settings.chat_model(),
         "stats": rag.stats(),
         "role": role,
     }
@@ -175,10 +217,30 @@ async def agent_chat(payload: ChatIn, role: str = Depends(security.require_staff
             session_id=payload.session_id,
             audience="internal",
             model=payload.model,
+            client_id=payload.client_id,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/api/agent/history")
+async def agent_history(session_id: str, role: str = Depends(security.require_staff)):
+    return {"messages": chat_service.conversation_messages(session_id, "internal")}
+
+
+@app.get("/api/agent/conversations")
+async def agent_conversations(client_id: str, role: str = Depends(security.require_staff)):
+    return {"conversations": chat_service.recent_conversations(client_id, "internal")}
+
+
+@app.delete("/api/agent/conversations/{session_id}")
+async def delete_agent_conversation(
+    session_id: str, client_id: str, role: str = Depends(security.require_staff)
+):
+    if not _delete_conversation(session_id, client_id, "internal"):
+        raise HTTPException(status_code=404, detail="گفتگو پیدا نشد.")
+    return {"ok": True}
 
 
 @app.post("/api/agent/rewrite")
@@ -408,9 +470,11 @@ async def admin_stats(role: str = Depends(security.require_admin)):
     return {
         "index": rag.stats(),
         "usage": dict(counts),
-        "model": config.CHAT_MODEL,
-        "embedding_model": config.EMBEDDING_MODEL,
-        "api_key_set": bool(config.AVALAI_API_KEY),
+        "model": settings.chat_model(),
+        "embedding_model": settings.embedding_model(),
+        "vision_model": settings.vision_model(),
+        "vision_enabled": settings.vision_enabled(),
+        "api_key_set": bool(settings.api_key()),
     }
 
 
@@ -491,6 +555,39 @@ async def close_ticket(ticket_id: int, role: str = Depends(security.require_admi
     return {"ok": True}
 
 
+@app.get("/api/admin/ai-settings")
+async def get_ai_settings(role: str = Depends(security.require_admin)):
+    return settings.public_view()
+
+
+@app.put("/api/admin/ai-settings")
+async def put_ai_settings(payload: AISettingsIn, role: str = Depends(security.require_admin)):
+    values: dict[str, str] = {}
+    for field_name in ("chat_model", "fast_model", "vision_model", "embedding_model"):
+        value = getattr(payload, field_name)
+        if value is not None:
+            values[field_name] = value
+    if payload.vision_enabled is not None:
+        values["vision_enabled"] = "true" if payload.vision_enabled else "false"
+    # کلید خالی یعنی «دست نزن»؛ برای پاک کردن باید صریحاً "-" فرستاده شود
+    if payload.avalai_api_key is not None:
+        key = payload.avalai_api_key.strip()
+        if key == "-":
+            values["avalai_api_key"] = ""
+        elif key and not key.startswith("•"):
+            values["avalai_api_key"] = key
+
+    settings.save(values)
+    rag.invalidate_cache()
+    return settings.public_view()
+
+
+@app.post("/api/admin/ai-test")
+async def test_ai_settings(role: str = Depends(security.require_admin)):
+    """همان تست‌های scripts/check_avalai.py، از داخل پنل."""
+    return {"checks": await diagnostics.run_checks()}
+
+
 @app.get("/api/admin/settings")
 async def get_settings(role: str = Depends(security.require_admin)):
     rows = db.query("SELECT key, value FROM settings")
@@ -511,8 +608,8 @@ async def put_settings(payload: SettingsIn, role: str = Depends(security.require
 async def health():
     return {
         "status": "ok",
-        "model": config.CHAT_MODEL,
-        "api_key_set": bool(config.AVALAI_API_KEY),
+        "model": settings.chat_model(),
+        "api_key_set": bool(settings.api_key()),
         "index": rag.stats(),
     }
 

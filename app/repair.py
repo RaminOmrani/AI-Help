@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import re
 
-from . import avalai, config
+from . import avalai, config, settings
 
 REPAIR_SYSTEM = """تو یک ابزار بازسازی متن فارسی هستی.
 متنی که می‌گیری از یک فایل PDF استخراج شده و به هم ریخته است: کلمه‌ها وسط راه شکسته‌اند،
@@ -52,7 +52,7 @@ async def repair_page(text: str, semaphore: asyncio.Semaphore) -> str:
                     {"role": "system", "content": REPAIR_SYSTEM},
                     {"role": "user", "content": text[:MAX_CHARS]},
                 ],
-                model=config.FAST_MODEL,
+                model=settings.fast_model(),
                 temperature=0.0,
                 max_tokens=4000,
             )
@@ -77,7 +77,7 @@ async def repair_pages(
     صفحه‌هایی که در `skip` باشند دست‌نخورده می‌مانند — مثلاً صفحه‌هایی که
     قبلاً مدل بینایی خوانده و متنشان از قبل تمیز است.
     """
-    if not config.AVALAI_API_KEY:
+    if not settings.api_key():
         return pages, 0
 
     skip = skip or set()

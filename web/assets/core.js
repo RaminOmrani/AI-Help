@@ -110,6 +110,15 @@ export const store = {
   get tokenKey() { return `ai_token_${tokenScope}`; },
   get token()  { return localStorage.getItem(this.tokenKey) || ''; },
   set token(v) { v ? localStorage.setItem(this.tokenKey, v) : localStorage.removeItem(this.tokenKey); },
+  /** شناسه‌ی پایدار مرورگر — با «گفتگوی جدید» عوض نمی‌شود، پس سابقه حفظ می‌ماند. */
+  get client() {
+    let id = localStorage.getItem('ai_client');
+    if (!id) {
+      id = crypto.randomUUID?.() || String(Date.now() + Math.random());
+      localStorage.setItem('ai_client', id);
+    }
+    return id;
+  },
   get session() {
     let id = localStorage.getItem('ai_session');
     if (!id) {
@@ -123,6 +132,7 @@ export const store = {
     localStorage.setItem('ai_session', id);
     return id;
   },
+  useSession(id) { localStorage.setItem('ai_session', id); },
 };
 
 /* ---------- درخواست‌ها ---------- */
@@ -215,3 +225,75 @@ export function copyText(text) {
 export const faDigits = (n) => String(n ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
 export const money = (n) => faDigits(Math.round(Number(n) || 0).toLocaleString('en-US'));
+
+
+/* ---------- درِ کشویی سابقه ---------- */
+/**
+ * یک درِ کشویی برای گفتگوهای قبلی می‌سازد.
+ * @param {object} o
+ * @param {() => Promise<Array>} o.load   گرفتن فهرست گفتگوها
+ * @param {(sessionId: string) => void} o.open   باز کردن یک گفتگو
+ * @param {(sessionId: string) => Promise<void>} o.remove  حذف یک گفتگو
+ * @param {() => void} o.fresh  شروع گفتگوی جدید
+ */
+export function openHistoryDrawer({ load, open, remove, fresh }) {
+  const backdrop = document.createElement('div');
+  backdrop.className = 'drawer-backdrop';
+
+  const drawer = document.createElement('aside');
+  drawer.className = 'drawer';
+  drawer.innerHTML = `
+    <header>
+      <b>گفتگوهای قبلی</b>
+      <button class="btn btn-sm btn-primary" data-x="new">✨ جدید</button>
+      <button class="btn btn-sm btn-ghost" data-x="close">✕</button>
+    </header>
+    <div class="list"><p class="empty-note">در حال بارگذاری…</p></div>`;
+
+  document.body.append(backdrop, drawer);
+  const close = () => { backdrop.remove(); drawer.remove(); };
+  backdrop.addEventListener('click', close);
+  drawer.querySelector('[data-x="close"]').onclick = close;
+  drawer.querySelector('[data-x="new"]').onclick = () => { close(); fresh(); };
+
+  const list = drawer.querySelector('.list');
+  const current = store.session;
+
+  const render = (items) => {
+    if (!items.length) {
+      list.innerHTML = '<p class="empty-note">هنوز گفتگویی ثبت نشده.<br>سوالت را بپرس تا اینجا ذخیره شود.</p>';
+      return;
+    }
+    list.innerHTML = items
+      .map((c) => `
+        <div class="conv ${c.session_id === current ? 'on' : ''}" data-s="${escapeHtml(c.session_id)}">
+          <div class="txt">
+            <b>${escapeHtml(c.title || 'بدون عنوان')}</b>
+            <span>${faDigits(c.turns)} پیام · <time>${escapeHtml((c.created_at || '').slice(0, 16))}</time></span>
+          </div>
+          <button class="del" title="حذف">🗑</button>
+        </div>`)
+      .join('');
+
+    list.querySelectorAll('.conv').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.del')) return;
+        close();
+        open(el.dataset.s);
+      });
+      el.querySelector('.del').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try {
+          await remove(el.dataset.s);
+          el.remove();
+          if (!list.querySelector('.conv')) render([]);
+          if (el.dataset.s === current) fresh();
+        } catch (err) { toast(err.message, 'err'); }
+      });
+    });
+  };
+
+  load().then(render).catch((err) => {
+    list.innerHTML = `<p class="empty-note">${escapeHtml(err.message)}</p>`;
+  });
+}
