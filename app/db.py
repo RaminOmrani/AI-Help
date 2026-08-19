@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS documents (
     checksum      TEXT DEFAULT '',
     embedded      INTEGER DEFAULT 0,              -- ۱ اگر بردارها ساخته شده باشند
     repaired      INTEGER DEFAULT 0,              -- تعداد صفحه‌های بازسازی‌شده با AI
+    vision_pages  INTEGER DEFAULT 0,              -- تعداد صفحه‌هایی که تصویرشان خوانده شد
     ai_repair     INTEGER DEFAULT 1,              -- آیا بازسازی متن با AI انجام شود
     progress      TEXT DEFAULT '',                -- توضیح مرحله‌ی جاری پردازش
     created_at    TEXT DEFAULT (datetime('now')),
@@ -130,6 +131,7 @@ def get_conn():
 
 MIGRATIONS = [
     ("documents", "repaired", "INTEGER DEFAULT 0"),
+    ("documents", "vision_pages", "INTEGER DEFAULT 0"),
     ("documents", "ai_repair", "INTEGER DEFAULT 1"),
     ("documents", "progress", "TEXT DEFAULT ''"),
 ]

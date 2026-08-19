@@ -14,6 +14,7 @@ import numpy as np
 from . import avalai, config, db
 from .ingest import chunk_pages, checksum, extract_pages
 from .repair import repair_pages
+from .vision import read_pages
 from .textutils import normalize, snippet, tokens
 
 _index_lock = threading.Lock()
@@ -56,15 +57,29 @@ async def index_document(doc_id: int) -> dict:
         raise
 
     repaired = 0
-    needs_ai_repair = path.suffix.lower() == ".pdf"  # فقط PDF متن شکسته می‌دهد
-    if row["ai_repair"] and needs_ai_repair and config.AVALAI_API_KEY:
-        _progress(doc_id, f"بازسازی متن با هوش مصنوعی (۰ از {len(pages)})…")
+    vision_pages: list[int] = []
+    is_pdf = path.suffix.lower() == ".pdf"  # فقط PDF متن شکسته و اسکرین‌شات دارد
 
-        def on_progress(done: int, total: int) -> None:
-            _progress(doc_id, f"بازسازی متن با هوش مصنوعی ({done} از {total})…")
+    if row["ai_repair"] and is_pdf and config.AVALAI_API_KEY:
+        # ۱) صفحه‌های عکس‌دار: تصویر صفحه به مدل بینایی می‌رود
+        def on_vision(done: int, total: int) -> None:
+            _progress(doc_id, f"خواندن تصویر صفحه‌ها ({done} از {total})…")
 
         try:
-            pages, repaired = await repair_pages(pages, on_progress=on_progress)
+            _progress(doc_id, "بررسی صفحه‌های عکس‌دار…")
+            pages, vision_pages = await read_pages(path, pages, on_progress=on_vision)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[rag] خواندن تصویری ناموفق بود: {exc}")
+
+        # ۲) بقیه‌ی صفحه‌ها: فقط اگر متنشان شکسته باشد، بازسازی متنی
+        def on_repair(done: int, total: int) -> None:
+            _progress(doc_id, f"بازسازی متن ({done} از {total})…")
+
+        try:
+            _progress(doc_id, "بررسی متن صفحه‌ها…")
+            pages, repaired = await repair_pages(
+                pages, on_progress=on_repair, skip=set(vision_pages)
+            )
         except Exception as exc:  # noqa: BLE001
             print(f"[rag] بازسازی متن ناموفق بود: {exc}")
 
@@ -100,13 +115,20 @@ async def index_document(doc_id: int) -> dict:
         pages=len(pages),
         chunk_count=len(chunks),
         repaired=repaired,
+        vision_pages=len(vision_pages),
         progress="",
         embedded=1 if embedded else 0,
         checksum=await asyncio.to_thread(checksum, path),
         error="" if embedded else "بردارسازی انجام نشد؛ فعلاً جستجوی کلیدواژه‌ای فعال است.",
     )
     invalidate_cache()
-    return {"chunks": len(chunks), "pages": len(pages), "embedded": embedded, "repaired": repaired}
+    return {
+        "chunks": len(chunks),
+        "pages": len(pages),
+        "embedded": embedded,
+        "repaired": repaired,
+        "vision_pages": len(vision_pages),
+    }
 
 
 async def _embed_document(doc_id: int) -> bool:

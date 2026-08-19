@@ -115,7 +115,8 @@
   <section class="tab on" id="tab-docs">
     <div class="drop" id="drop">
       <h3>📥 فایل‌های راهنما را اینجا رها کنید</h3>
-      <p>PDF، Word (docx)، متن ساده یا Markdown — حداکثر ۶۰ مگابایت برای هر فایل</p>
+      <p>PDF، Word (docx)، متن ساده یا Markdown — حداکثر ۶۰ مگابایت برای هر فایل<br>
+      اسکرین‌شات‌های داخل PDF هم خوانده و قابل جستجو می‌شوند 👁</p>
       <button class="btn btn-primary" id="pickBtn">انتخاب فایل</button>
       <button class="btn btn-ghost" id="importBtn">وارد کردن پوشه‌ی docs</button>
       <input type="file" id="file" multiple hidden accept=".pdf,.docx,.txt,.md,.csv">
@@ -126,8 +127,9 @@
           <option value="public">فقط مشتریان</option>
           <option value="internal">فقط کارشناسان پشتیبانی</option>
         </select>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-          <input type="checkbox" id="repair" checked> بازسازی متن با هوش مصنوعی
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer"
+               title="صفحه‌های عکس‌دار به مدل بینایی داده می‌شوند تا محتوای اسکرین‌شات‌ها هم قابل جستجو شود. فقط یک‌بار هنگام بارگذاری.">
+          <input type="checkbox" id="repair" checked> خواندن متن و تصویرهای فایل با هوش مصنوعی
         </label>
       </div>
     </div>
@@ -304,6 +306,7 @@ async function loadDocs() {
         <td>
           <b>${escapeHtml(d.title)}</b>
           <div class="muted tiny">${escapeHtml(d.filename)} · ${faDigits(d.size_mb)} مگابایت
+          ${d.vision_pages ? ` · 👁 ${faDigits(d.vision_pages)} صفحه تصویری خوانده شد` : ''}
           ${d.repaired ? ` · ${faDigits(d.repaired)} صفحه بازسازی‌شده` : ''}</div>
         </td>
         <td>

@@ -70,15 +70,21 @@ async def repair_pages(
     pages: list[str],
     *,
     on_progress=None,
+    skip: set[int] | None = None,
 ) -> tuple[list[str], int]:
-    """صفحه‌ها را بازسازی می‌کند و تعداد صفحه‌های بازسازی‌شده را برمی‌گرداند."""
+    """صفحه‌ها را بازسازی می‌کند و تعداد صفحه‌های بازسازی‌شده را برمی‌گرداند.
+
+    صفحه‌هایی که در `skip` باشند دست‌نخورده می‌مانند — مثلاً صفحه‌هایی که
+    قبلاً مدل بینایی خوانده و متنشان از قبل تمیز است.
+    """
     if not config.AVALAI_API_KEY:
         return pages, 0
 
+    skip = skip or set()
     semaphore = asyncio.Semaphore(CONCURRENCY)
     targets = [
         i for i, p in enumerate(pages)
-        if len(p) >= MIN_CHARS and _needs_repair(p)
+        if i not in skip and len(p) >= MIN_CHARS and _needs_repair(p)
     ]
     if not targets:
         return pages, 0

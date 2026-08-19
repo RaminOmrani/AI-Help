@@ -13,7 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app import avalai, config  # noqa: E402
+from app import avalai, config, vision  # noqa: E402
 
 OK, BAD, INFO = "✅", "❌", "•"
 
@@ -40,6 +40,20 @@ def _print_candidates(models: list[str]) -> None:
         if len(matches) > 18:
             print(f"      … و {len(matches) - 18} مورد دیگر")
     print()
+
+
+def _sample_image() -> str:
+    """یک تصویر کوچک با عدد ۱۲۳۴ می‌سازد تا خواندن تصویر تست شود."""
+    import base64
+
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=260, height=120)
+    page.insert_text((40, 75), "1234", fontsize=54)
+    png = page.get_pixmap(dpi=110).tobytes("png")
+    doc.close()
+    return "data:image/png;base64," + base64.b64encode(png).decode()
 
 
 async def main() -> int:
@@ -75,6 +89,7 @@ async def main() -> int:
     for label, name in (
         ("مدل پاسخ‌دهی", config.CHAT_MODEL),
         ("مدل سبک", config.FAST_MODEL),
+        ("مدل بینایی", config.VISION_MODEL),
         ("مدل بردارسازی", config.EMBEDDING_MODEL),
     ):
         if models and name not in models:
@@ -94,6 +109,32 @@ async def main() -> int:
     except Exception as exc:  # noqa: BLE001
         failures += 1
         print(f"{BAD} مدل پاسخ‌دهی «{config.CHAT_MODEL}» کار نکرد: {exc}")
+
+    # ---------- تست بینایی ----------
+    if config.VISION_ENABLED:
+        try:
+            data_url = _sample_image()
+            answer = await avalai.chat(
+                [{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                        {"type": "text", "text": "فقط عددی که در تصویر نوشته شده را بنویس."},
+                    ],
+                }],
+                model=config.VISION_MODEL,
+                max_tokens=30,
+            )
+            if "1234" in answer.replace("۱۲۳۴", "1234"):
+                print(f"{OK} مدل بینایی «{config.VISION_MODEL}» تصویر را درست خواند.")
+            else:
+                failures += 1
+                print(f"{BAD} مدل بینایی تصویر را درست نخواند (پاسخ: {answer[:60]}).")
+                print("   یعنی اسکرین‌شات‌های داخل PDF خوانده نمی‌شوند. VISION_MODEL را عوض کنید.")
+        except Exception as exc:  # noqa: BLE001
+            failures += 1
+            print(f"{BAD} مدل بینایی «{config.VISION_MODEL}» کار نکرد: {exc}")
+            print("   یک مدل با پشتیبانی تصویر انتخاب کنید (Gemini، GPT-5.x، Claude).")
 
     # ---------- تست بردارسازی ----------
     try:

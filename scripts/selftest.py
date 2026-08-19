@@ -7,6 +7,7 @@
 """
 
 import asyncio
+import base64
 import hashlib
 import json
 import os
@@ -23,9 +24,9 @@ os.environ['DATA_DIR'] = str(WORK)
 os.environ['DOCS_DIR'] = str(WORK / 'docs')
 os.environ['AVALAI_API_KEY'] = 'aa-fake-key-for-testing'
 
-from app import avalai, config, db, rag, chat_service, repair  # noqa: E402
+from app import avalai, config, db, rag, chat_service, repair, vision  # noqa: E402
 
-calls = {"chat": 0, "embed": 0, "stream": 0}
+calls = {"chat": 0, "embed": 0, "stream": 0, "vision": 0, "image_bytes": []}
 
 
 def fake_vector(text, dim=64):
@@ -45,6 +46,17 @@ async def fake_embed(texts, model=None):
 async def fake_chat(messages, model=None, temperature=0.0, max_tokens=None):
     calls["chat"] += 1
     user = messages[-1]["content"]
+    # درخواست بینایی: محتوا لیستی شامل تصویر است
+    if isinstance(user, list):
+        image = next((c for c in user if c.get("type") == "image_url"), None)
+        assert image, "تصویری به مدل بینایی نرسید"
+        url = image["image_url"]["url"]
+        assert url.startswith("data:image/jpeg;base64,"), "قالب تصویر درست نیست"
+        raw = base64.b64decode(url.split(",", 1)[1])
+        assert raw[:3] == b"\xff\xd8\xff", "تصویر JPEG معتبر نیست"
+        calls["vision"] += 1
+        calls["image_bytes"].append(len(raw))
+        return "متن تمیزشده‌ی صفحه.\n\nتصویر: پنجره‌ی Welcome نصب SQL Server — دکمه‌ی Next را بزنید."
     if messages[0]["content"].startswith("تو یک ابزار بازسازی"):
         return user.replace("سواالت", "سوالات").replace("کاال", "کالا")
     return "پاسخ ساختگی"
@@ -62,6 +74,7 @@ avalai.embed = fake_embed
 avalai.chat = fake_chat
 avalai.chat_stream = fake_stream
 repair.avalai.chat = fake_chat
+vision.avalai.chat = fake_chat
 rag.avalai.embed = fake_embed
 chat_service.avalai.chat_stream = fake_stream
 
@@ -143,6 +156,28 @@ async def main():
     _, skipped = await repair.repair_pages([clean])
     assert skipped == 0, "متن سالم بی‌دلیل به مدل فرستاده شد"
     print("✅ بازسازی متن فقط روی صفحه‌های شکسته اجرا می‌شود")
+
+    # ---- خواندن تصویری صفحه‌های PDF ----
+    guide = next(
+        (p for p in Path("docs").glob("*.pdf") if vision.pages_with_images(p)), None
+    ) if Path("docs").exists() else None
+
+    if guide:
+        vision.config.VISION_MAX_PAGES = 2  # برای سرعت تست
+        doc_pdf = db.execute(
+            "INSERT INTO documents(title, filename, path, audience, size_bytes) VALUES (?,?,?,?,?)",
+            (guide.stem, guide.name, str(guide), "internal", guide.stat().st_size))
+        before = calls["vision"]
+        info = await rag.index_document(doc_pdf)
+        assert info["vision_pages"] == 2, f"انتظار ۲ صفحه‌ی تصویری، دریافت {info['vision_pages']}"
+        assert calls["vision"] - before == 2, "مدل بینایی فراخوانی نشد"
+        avg_kb = sum(calls["image_bytes"]) // len(calls["image_bytes"]) // 1024
+        found = db.query_one("SELECT page FROM chunks WHERE text LIKE '%Welcome%' LIMIT 1")
+        assert found, "متنِ آمده از تصویر وارد ایندکس نشد"
+        print(f"✅ اسکرین‌شات‌ها خوانده و ایندکس شدند "
+              f"({info['vision_pages']} صفحه، میانگین {avg_kb} کیلوبایت، صفحه‌ی {found['page']})")
+    else:
+        print("• تست بینایی رد شد (فایل PDF عکس‌داری در پوشه‌ی docs نبود)")
 
     # ---- حذف سند ----
     db.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_public,))

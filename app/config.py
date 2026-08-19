@@ -38,10 +38,11 @@ AVALAI_BASE_URL = _env("AVALAI_BASE_URL", "https://api.avalai.ir/v1").rstrip("/"
 # اندپوینت اعتبار خارج از /v1 است
 AVALAI_CREDIT_URL = _env("AVALAI_CREDIT_URL", "https://api.avalai.ir/user/v1/credit")
 
-CHAT_MODEL = _env("CHAT_MODEL", "gemini-2.5-flash")
+CHAT_MODEL = _env("CHAT_MODEL", "gemini-3.7-flash")
 FAST_MODEL = _env("FAST_MODEL", CHAT_MODEL)
+VISION_MODEL = _env("VISION_MODEL", CHAT_MODEL)
 EMBEDDING_MODEL = _env("EMBEDDING_MODEL", "text-embedding-3-large")
-REQUEST_TIMEOUT = _env_float("REQUEST_TIMEOUT", 120.0)
+REQUEST_TIMEOUT = _env_float("REQUEST_TIMEOUT", 180.0)
 
 # ------------------------------------------------------------------
 # مسیرها
@@ -63,6 +64,15 @@ CHUNK_OVERLAP = _env_int("CHUNK_OVERLAP", 160)
 TOP_K = _env_int("TOP_K", 8)
 EMBED_BATCH = _env_int("EMBED_BATCH", 48)
 MAX_UPLOAD_MB = _env_int("MAX_UPLOAD_MB", 60)
+
+# ------------------------------------------------------------------
+# خواندن تصویری صفحه‌های PDF (اسکرین‌شات‌ها)
+# ------------------------------------------------------------------
+VISION_ENABLED = _env("VISION_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+VISION_DPI = _env_int("VISION_DPI", 120)
+VISION_JPEG_QUALITY = _env_int("VISION_JPEG_QUALITY", 85)
+VISION_MAX_PAGES = _env_int("VISION_MAX_PAGES", 300)
+VISION_CONCURRENCY = _env_int("VISION_CONCURRENCY", 3)
 
 # ------------------------------------------------------------------
 # امنیت
