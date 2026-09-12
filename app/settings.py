@@ -130,10 +130,11 @@ def access_codes() -> list[str]:
 
 
 def code_is_valid(candidate: str) -> bool:
-    import hmac
+    from .security import constant_time_equals
 
     candidate = (candidate or "").strip()
     if not candidate:
         return False
-    # compare_digest تا زمان مقایسه اطلاعاتی درباره‌ی کد لو ندهد
-    return any(hmac.compare_digest(candidate, code) for code in access_codes())
+    # مقایسه در زمان ثابت تا طول تطابق کد را لو ندهد.
+    # حتماً از نسخه‌ی بایت‌محور استفاده می‌شود، وگرنه کد فارسی خطا می‌دهد.
+    return any(constant_time_equals(candidate, code) for code in access_codes())

@@ -18,6 +18,16 @@ ROLE_PASSWORDS = {
 }
 
 
+def constant_time_equals(given: str | None, expected: str | None) -> bool:
+    """مقایسه‌ی رمز در زمان ثابت، بدون فرض ASCII بودن.
+
+    hmac.compare_digest روی رشته فقط با نویسه‌های ASCII کار می‌کند و اگر کاربر
+    حتی یک حرف فارسی تایپ کند TypeError می‌دهد. با تبدیل به بایت هم رمز فارسی
+    پشتیبانی می‌شود و هم مقایسه در زمان ثابت باقی می‌ماند.
+    """
+    return hmac.compare_digest((given or "").encode("utf-8"), (expected or "").encode("utf-8"))
+
+
 def _sign(payload: bytes) -> str:
     digest = hmac.new(config.SECRET_KEY.encode(), payload, hashlib.sha256).digest()
     return base64.urlsafe_b64encode(digest).decode().rstrip("=")
@@ -61,7 +71,7 @@ def login(role: str, password: str) -> str:
     if not getter:
         raise HTTPException(status_code=400, detail="نقش نامعتبر است.")
     expected = getter()
-    if not expected or not hmac.compare_digest(password or "", expected):
+    if not expected or not constant_time_equals(password, expected):
         raise HTTPException(status_code=401, detail="رمز عبور اشتباه است.")
     return create_token(role)
 
