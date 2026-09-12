@@ -23,10 +23,19 @@
 اگر از کلادفلر استفاده می‌کنید، فعلاً ابر را **خاکستری** (DNS only) بگذارید تا
 گواهی صادر شود؛ بعد می‌توانید نارنجی‌اش کنید.
 
-بررسی کنید که دامنه به سرور رسیده باشد:
+بررسی کنید که دامنه به **همان سروری** رسیده باشد که می‌خواهید روی آن نصب کنید
+(دامنه‌ی اصلی روی cPanel است و آی‌پی دیگری دارد؛ این زیر‌دامنه باید به VPS اشاره کند):
 
 ```bash
-ping aiassist.softmiliac.com
+# روی خود VPS بزنید — دو خروجی باید یکی باشند
+curl -s ifconfig.me; echo
+getent hosts aiassist.softmiliac.com
+```
+
+و مطمئن شوید پورت ۸۰ آزاد است (اگر آپاچی یا سایت دیگری روی همین VPS است، تداخل می‌شود):
+
+```bash
+sudo ss -tlnp | grep -E ':80|:443'
 ```
 
 ---
@@ -81,13 +90,37 @@ sudo systemctl enable --now aiassist
 sudo systemctl status aiassist
 ```
 
+بررسی کنید واقعاً بالا آمده باشد — باید `200` چاپ کند:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/
+```
+
+اگر `200` نبود، علتش را اینجا ببینید:
+
+```bash
+sudo journalctl -u aiassist -n 50 --no-pager
+```
+
 ### ۶. nginx و گواهی HTTPS
 
 ```bash
 sudo cp deploy/nginx.conf /etc/nginx/sites-available/aiassist
 sudo ln -s /etc/nginx/sites-available/aiassist /etc/nginx/sites-enabled/
 sudo nginx -t && sudo systemctl reload nginx
+```
 
+فایل ارسالی عمداً فقط `HTTP` دارد؛ `certbot` خودش بلوک `HTTPS` را اضافه می‌کند.
+اگر این VPS سایت دیگری ندارد، صفحه‌ی پیش‌فرض nginx را بردارید تا مزاحم نشود:
+
+```bash
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo systemctl reload nginx
+```
+
+حالا گواهی:
+
+```bash
 sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d aiassist.softmiliac.com
 ```
@@ -170,7 +203,22 @@ sudo -u aiassist venv/bin/python scripts/preflight.py
 
 اگر فایلی که رمز دارد را روی «هم مشتری» بگذارید، دستیار مشتری هم آن را می‌بیند.
 
-### ۳. سه آدرس نهایی
+### ۳. محدود کردن دسترسی (فعلاً فقط تیم و مشتریان میلیونر)
+
+در همان پنل، تب **«🔑 کلید و مدل‌ها»** → بخش **«دسترسی صفحه‌ی مشتری»**:
+
+| حالت | یعنی |
+|---|---|
+| **باز** | هر کسی با لینک می‌تواند بپرسد |
+| **با کد** | اول باید یک کد دسترسی وارد کند |
+
+فعلاً **«با کد»** را بزنید و چند کد بنویسید (هر کدام در یک خط)، مثلاً یکی برای
+تیم پشتیبانی و یکی برای مشتریان. هر وقت خواستید برای همه باز شود، همین‌جا
+روی **«باز»** بگذارید — نیازی به دست زدن به سرور نیست.
+
+کد یک بار وارد می‌شود و در مرورگر کاربر می‌ماند؛ با رفرش دوباره پرسیده نمی‌شود.
+
+### ۴. سه آدرس نهایی
 
 | آدرس | برای چه کسی |
 |---|---|

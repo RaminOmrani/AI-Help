@@ -31,6 +31,11 @@ ExecStart=/opt/aiassist/venv/bin/uvicorn app.main:app \
     --proxy-headers \
     --forwarded-allow-ips 127.0.0.1
 
+# اگر پوشه‌ی data وجود نداشته باشد، ReadWritePaths پایین باعث می‌شود سرویس
+# اصلاً بالا نیاید (status=226/NAMESPACE). این خط با پیشوند + خارج از سندباکس
+# و با دسترسی کامل اجرا می‌شود و پوشه را با مالکیت درست می‌سازد.
+ExecStartPre=+/usr/bin/install -d -o aiassist -g aiassist /opt/aiassist/data
+
 Restart=always
 RestartSec=5
 KillSignal=SIGINT
