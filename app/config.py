@@ -115,6 +115,13 @@ RATE_LIMIT_ENABLED = _env("RATE_LIMIT_ENABLED", "true").lower() in {"1", "true",
 RATE_LIMIT_PER_MINUTE = _env_int("RATE_LIMIT_PER_MINUTE", 10)
 RATE_LIMIT_PER_DAY = _env_int("RATE_LIMIT_PER_DAY", 150)
 
+# دسترسی به صفحه‌ی مشتری: open (همه) یا code (فقط با کد دسترسی).
+# از پنل مدیریت هم قابل تغییر است و همان‌جا اولویت دارد.
+PUBLIC_ACCESS_MODE = _env("PUBLIC_ACCESS_MODE", "open")
+PUBLIC_ACCESS_CODES = _env("PUBLIC_ACCESS_CODES", "")
+# مهمان بعد از وارد کردن کد، این‌قدر روز در دسترس می‌ماند
+VISITOR_SESSION_DAYS = _env_int("VISITOR_SESSION_DAYS", 30)
+
 HOST = _env("HOST", "0.0.0.0")
 PORT = _env_int("PORT", 8000)
 # باز کردن خودکار مرورگر — فقط برای اجرای روی کامپیوتر شخصی

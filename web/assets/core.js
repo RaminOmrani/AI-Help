@@ -138,7 +138,7 @@ export const store = {
 };
 
 /* ---------- درخواست‌ها ---------- */
-export async function api(path, { method = 'GET', body, auth = false } = {}) {
+export async function api(path, { method = 'GET', body, auth = false, soft = false } = {}) {
   const headers = {};
   if (auth) headers.Authorization = `Bearer ${store.token}`;
   if (body && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
@@ -149,7 +149,8 @@ export async function api(path, { method = 'GET', body, auth = false } = {}) {
     body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
   });
 
-  if (auth && (res.status === 401 || res.status === 403)) {
+  // soft یعنی صفحه خودش ۴۰۱ را مدیریت می‌کند (مثل صفحه‌ی قفل مشتری)
+  if (auth && !soft && (res.status === 401 || res.status === 403)) {
     store.token = '';
     location.reload();
   }
@@ -162,7 +163,7 @@ export async function api(path, { method = 'GET', body, auth = false } = {}) {
 }
 
 /* ---------- استریم SSE ---------- */
-export async function streamChat(path, payload, handlers, { auth = false } = {}) {
+export async function streamChat(path, payload, handlers, { auth = false, onUnauthorized } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (auth) headers.Authorization = `Bearer ${store.token}`;
 
@@ -171,6 +172,10 @@ export async function streamChat(path, payload, handlers, { auth = false } = {})
     res = await fetch(path, { method: 'POST', headers, body: JSON.stringify(payload) });
   } catch {
     handlers.error?.({ message: 'ارتباط با سرور برقرار نشد. مطمئن شوید سرور روشن است.' });
+    return;
+  }
+  if (res.status === 401 && onUnauthorized) {
+    onUnauthorized();
     return;
   }
   if (!res.ok || !res.body) {

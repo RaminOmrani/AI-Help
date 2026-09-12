@@ -195,7 +195,7 @@
 
 <script type="module">
 import { $, md, api, toast, store, streamChat, initTheme, copyText, escapeHtml, openHistoryDrawer,
-         mountLengthPicker } from '/assets/core.js';
+         mountLengthPicker, setAuthScope } from '/assets/core.js';
 
 const stream = $('#stream');
 const heroTemplate = $('#hero').cloneNode(true);
@@ -204,9 +204,53 @@ const sendBtn = $('#sendBtn');
 let busy = false;
 let info = {};
 
+setAuthScope('visitor');
 initTheme('#themeBtn');
 
 /* ---------- راه‌اندازی ---------- */
+/* ---------- قفل دسترسی ---------- */
+function showGate(message = '') {
+  if (document.querySelector('.gate')) return;
+  const gate = document.createElement('div');
+  gate.className = 'gate';
+  gate.innerHTML = `
+    <div class="card">
+      <div class="orb" data-face="🔐"></div>
+      <h2>کد دسترسی</h2>
+      <p>این دستیار فعلاً برای مشتریان و همکاران ${escapeHtml(info.brand || '')} است.<br>
+         کد دسترسی را وارد کنید.</p>
+      <input class="field" id="gateCode" placeholder="کد دسترسی" autocomplete="off">
+      <p class="err" id="gateErr">${escapeHtml(message)}</p>
+      <button class="btn btn-primary" id="gateBtn" style="width:100%;margin-top:12px">ورود</button>
+      ${info.support_phone
+        ? `<p class="muted tiny" style="margin:18px 0 0">کد ندارید؟ تماس بگیرید: <b dir="ltr">${escapeHtml(info.support_phone)}</b></p>`
+        : ''}
+    </div>`;
+  document.body.appendChild(gate);
+
+  const input = gate.querySelector('#gateCode');
+  const err = gate.querySelector('#gateErr');
+  const submit = async () => {
+    const code = input.value.trim();
+    if (!code) return;
+    err.textContent = '';
+    try {
+      const res = await api('/api/public/unlock', { method: 'POST', body: { code } });
+      store.token = res.token;
+      gate.remove();
+      await restoreConversation();
+      input.blur();
+      $('#q').focus();
+    } catch (e) {
+      err.textContent = e.message;
+      input.select();
+    }
+  };
+  gate.querySelector('#gateBtn').onclick = submit;
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  input.focus();
+}
+
 try {
   info = await api('/api/bootstrap');
   $('#brandName').textContent = `دستیار ${info.assistant || 'هوشمند'}`;
@@ -291,7 +335,7 @@ async function ask(text) {
       body.classList.remove('caret');
       renderMeta(meta, e.message_id, answer, sources, e.grounded);
     },
-  });
+  }, { auth: true, onUnauthorized: () => { botEl.remove(); showGate('برای ادامه، دوباره کد دسترسی را وارد کنید.'); } });
 
   orb.classList.remove('thinking');
   body.classList.remove('caret');
@@ -338,7 +382,8 @@ sendBtn.addEventListener('click', () => ask());
 async function restoreConversation() {
   let messages = [];
   try {
-    messages = (await api(`/api/history?session_id=${encodeURIComponent(store.session)}`)).messages;
+    messages = (await api(`/api/history?session_id=${encodeURIComponent(store.session)}`,
+                          { auth: true, soft: true })).messages;
   } catch { return; }
   if (!messages.length) return;
 
@@ -375,17 +420,23 @@ $('#newBtn').addEventListener('click', startFresh);
 $('#histBtn').addEventListener('click', () =>
   openHistoryDrawer({
     load: async () =>
-      (await api(`/api/conversations?client_id=${encodeURIComponent(store.client)}`)).conversations,
+      (await api(`/api/conversations?client_id=${encodeURIComponent(store.client)}`,
+                 { auth: true, soft: true })).conversations,
     open: openConversation,
     remove: (sessionId) =>
       api(`/api/conversations/${encodeURIComponent(sessionId)}?client_id=${encodeURIComponent(store.client)}`,
-          { method: 'DELETE' }),
+          { method: 'DELETE', auth: true, soft: true }),
     fresh: startFresh,
   })
 );
 
 mountLengthPicker($('#lenPick'));
-await restoreConversation();
+
+if (info.access_mode === 'code' && !store.token) {
+  showGate();
+} else {
+  await restoreConversation();
+}
 
 /* ---------- ورودی صوتی ---------- */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -443,6 +494,7 @@ $('#humanBtn').addEventListener('click', () => {
     if (!body) { toast('لطفاً توضیح مشکل را بنویسید.', 'err'); return; }
     try {
       await api('/api/ticket', {
+        auth: true,
         method: 'POST',
         body: {
           name: back.querySelector('#tName').value,

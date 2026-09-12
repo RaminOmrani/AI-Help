@@ -66,6 +66,10 @@ class LoginIn(BaseModel):
     password: str
 
 
+class UnlockIn(BaseModel):
+    code: str = Field(min_length=1, max_length=120)
+
+
 class RewriteIn(BaseModel):
     text: str
 
@@ -88,6 +92,8 @@ class AISettingsIn(BaseModel):
     vision_model: str | None = None
     embedding_model: str | None = None
     vision_enabled: bool | None = None
+    public_access_mode: str | None = None
+    public_access_codes: str | None = None
 
 
 # ==================================================================
@@ -103,6 +109,7 @@ async def bootstrap():
         assistant=config.ASSISTANT_NAME, product=config.BRAND_PRODUCT
     )
     return {
+        "access_mode": settings.access_mode(),
         "brand": config.BRAND_NAME,
         "product": config.BRAND_PRODUCT,
         "assistant": config.ASSISTANT_NAME,
@@ -114,8 +121,24 @@ async def bootstrap():
     }
 
 
+@app.post("/api/public/unlock")
+async def unlock(payload: UnlockIn, request: Request):
+    """تبدیل کد دسترسی به توکن مهمان."""
+    ratelimit.check(request, cost=2)   # جلوگیری از حدس زدن کد
+    if not settings.code_is_valid(payload.code):
+        raise HTTPException(status_code=401, detail="کد دسترسی درست نیست.")
+    return {
+        "token": security.create_token("visitor", hours=config.VISITOR_SESSION_DAYS * 24),
+        "role": "visitor",
+    }
+
+
 @app.post("/api/chat")
-async def customer_chat(payload: ChatIn, request: Request):
+async def customer_chat(
+    payload: ChatIn,
+    request: Request,
+    _: str = Depends(security.require_visitor),
+):
     ratelimit.check(request)
     return StreamingResponse(
         chat_service.answer_stream(
@@ -143,13 +166,13 @@ def _delete_conversation(session_id: str, client_id: str, audience: str) -> bool
 
 
 @app.get("/api/history")
-async def customer_history(session_id: str):
+async def customer_history(session_id: str, _: str = Depends(security.require_visitor)):
     """پیام‌های گفتگوی جاری — تا با رفرش صفحه از دست نروند."""
     return {"messages": chat_service.conversation_messages(session_id, "public")}
 
 
 @app.get("/api/conversations")
-async def customer_conversations(client_id: str):
+async def customer_conversations(client_id: str, _: str = Depends(security.require_visitor)):
     """فهرست گفتگوهای قبلیِ همین مرورگر."""
     return {"conversations": chat_service.recent_conversations(client_id, "public")}
 
@@ -169,7 +192,11 @@ async def feedback(payload: FeedbackIn):
 
 
 @app.post("/api/ticket")
-async def create_ticket(payload: TicketIn, request: Request):
+async def create_ticket(
+    payload: TicketIn,
+    request: Request,
+    _: str = Depends(security.require_visitor),
+):
     ratelimit.check(request)
     conv = db.query_one(
         "SELECT id FROM conversations WHERE session_id = ? ORDER BY id DESC LIMIT 1",
@@ -581,7 +608,8 @@ async def get_ai_settings(role: str = Depends(security.require_admin)):
 @app.put("/api/admin/ai-settings")
 async def put_ai_settings(payload: AISettingsIn, role: str = Depends(security.require_admin)):
     values: dict[str, str] = {}
-    for field_name in ("chat_model", "fast_model", "vision_model", "embedding_model"):
+    for field_name in ("chat_model", "fast_model", "vision_model", "embedding_model",
+                       "public_access_mode", "public_access_codes"):
         value = getattr(payload, field_name)
         if value is not None:
             values[field_name] = value

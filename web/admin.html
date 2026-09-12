@@ -226,6 +226,31 @@
       </div>
     </div>
 
+    <div class="card" style="padding:22px;margin-bottom:16px">
+      <div class="settings-grid">
+        <div>
+          <label>دسترسی به صفحه‌ی مشتری</label>
+          <div class="seg" id="accessSeg" style="margin-top:4px">
+            <button data-mode="code">🔐 فقط با کد دسترسی</button>
+            <button data-mode="open">🌐 باز برای همه</button>
+          </div>
+          <p class="muted tiny" style="margin:8px 0 0" id="accessNote"></p>
+        </div>
+
+        <div id="codesBox">
+          <label>کدهای دسترسی — هر کد در یک خط</label>
+          <textarea class="field" id="accessCodes" style="min-height:90px;direction:ltr;text-align:left"
+                    placeholder="MIL-1404&#10;TEAM-SUPPORT"></textarea>
+          <p class="muted tiny" style="margin:6px 0 0">
+            می‌توانید برای هر گروه کد جدا بدهید (مثلاً یکی برای همکاران، یکی برای مشتریان).
+            برای باطل کردن یک کد، کافی است خطش را پاک کنید.
+          </p>
+        </div>
+
+        <div><button class="btn btn-primary" id="accessSave">ذخیره‌ی دسترسی</button></div>
+      </div>
+    </div>
+
     <div id="aiResults"></div>
 
     <p class="muted tiny">
@@ -555,6 +580,9 @@ async function loadAiSettings() {
   $('#ai_fast').value = a.fast_model;
   $('#ai_embed').value = a.embedding_model;
   $('#ai_vision_on').checked = a.vision_enabled;
+  accessMode = a.public_access_mode || 'open';
+  $('#accessCodes').value = a.public_access_codes || '';
+  paintAccess();
   $('#keyNote').textContent = !a.api_key_set
     ? 'هنوز کلیدی ثبت نشده — بدون آن هیچ پاسخی داده نمی‌شود.'
     : a.api_key_from_env
@@ -578,6 +606,36 @@ $('#aiSave').addEventListener('click', async () => {
     toast('ذخیره شد ✓', 'ok');
     await loadAiSettings();
     refreshStats();
+  } catch (err) { toast(err.message, 'err'); }
+});
+
+/* ---------- دسترسی به صفحه‌ی مشتری ---------- */
+let accessMode = 'open';
+
+function paintAccess() {
+  $$('#accessSeg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === accessMode));
+  $('#codesBox').hidden = accessMode !== 'code';
+  $('#accessNote').textContent = accessMode === 'code'
+    ? 'فقط کسانی که کد دارند می‌توانند از دستیار استفاده کنند. کنسول پشتیبان و پنل مدیریت رمز جدای خودشان را دارند.'
+    : 'هر کسی که آدرس را داشته باشد می‌تواند سوال بپرسد. محافظت فقط سقف تعداد سوال است.';
+}
+
+$$('#accessSeg button').forEach((b) =>
+  b.addEventListener('click', () => { accessMode = b.dataset.mode; paintAccess(); })
+);
+
+$('#accessSave').addEventListener('click', async () => {
+  const codes = $('#accessCodes').value.trim();
+  if (accessMode === 'code' && !codes) {
+    toast('حداقل یک کد دسترسی بنویسید، وگرنه هیچ‌کس نمی‌تواند وارد شود.', 'err');
+    return;
+  }
+  try {
+    await api('/api/admin/ai-settings', {
+      method: 'PUT', auth: true,
+      body: { public_access_mode: accessMode, public_access_codes: codes },
+    });
+    toast('تنظیمات دسترسی ذخیره شد ✓', 'ok');
   } catch (err) { toast(err.message, 'err'); }
 });
 

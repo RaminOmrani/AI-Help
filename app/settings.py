@@ -19,6 +19,10 @@ FIELDS: dict[str, str] = {
     "vision_model": config.VISION_MODEL,
     "embedding_model": config.EMBEDDING_MODEL,
     "vision_enabled": "true" if config.VISION_ENABLED else "false",
+    # open = هر کسی می‌تواند بپرسد | code = فقط با کد دسترسی
+    "public_access_mode": config.PUBLIC_ACCESS_MODE,
+    # کدهای دسترسی، هر کدام در یک خط. می‌شود برای گروه‌های مختلف کد جدا داد و بعداً حذفشان کرد.
+    "public_access_codes": config.PUBLIC_ACCESS_CODES,
 }
 
 SECRET_FIELDS = {"avalai_api_key"}
@@ -107,4 +111,29 @@ def public_view() -> dict:
         "vision_model": vision_model(),
         "embedding_model": embedding_model(),
         "vision_enabled": vision_enabled(),
+        "public_access_mode": access_mode(),
+        "public_access_codes": get("public_access_codes"),
     }
+
+
+# ------------------------------------------------------------------
+# دسترسی به صفحه‌ی مشتری
+# ------------------------------------------------------------------
+def access_mode() -> str:
+    """open یعنی برای همه باز است، code یعنی کد دسترسی لازم دارد."""
+    return "code" if get("public_access_mode").strip().lower() == "code" else "open"
+
+
+def access_codes() -> list[str]:
+    raw = get("public_access_codes") or ""
+    return [line.strip() for line in raw.replace(",", "\n").splitlines() if line.strip()]
+
+
+def code_is_valid(candidate: str) -> bool:
+    import hmac
+
+    candidate = (candidate or "").strip()
+    if not candidate:
+        return False
+    # compare_digest تا زمان مقایسه اطلاعاتی درباره‌ی کد لو ندهد
+    return any(hmac.compare_digest(candidate, code) for code in access_codes())

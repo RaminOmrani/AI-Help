@@ -31,10 +31,9 @@ def _unb64(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
-def create_token(role: str) -> str:
-    payload = json.dumps(
-        {"role": role, "exp": int(time.time()) + config.SESSION_HOURS * 3600}
-    ).encode()
+def create_token(role: str, *, hours: int | None = None) -> str:
+    lifetime = (hours or config.SESSION_HOURS) * 3600
+    payload = json.dumps({"role": role, "exp": int(time.time()) + lifetime}).encode()
     body = _b64(payload)
     return f"{body}.{_sign(payload)}"
 
@@ -78,6 +77,28 @@ async def require_admin(authorization: str | None = Header(default=None)) -> str
     if role != "admin":
         raise HTTPException(status_code=403, detail="دسترسی مدیر لازم است.")
     return role
+
+
+async def require_visitor(authorization: str | None = Header(default=None)) -> str:
+    """دسترسی به صفحه‌ی مشتری.
+
+    وقتی حالت روی «open» است هیچ چیزی لازم نیست. وقتی روی «code» است،
+    کاربر باید یک بار کد دسترسی را وارد کرده و توکن مهمان گرفته باشد.
+    کارکنان (مدیر و کارشناس) هم طبیعتاً اجازه دارند.
+    """
+    from . import settings
+
+    if settings.access_mode() == "open":
+        return "public"
+
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    role = verify_token(token) if token else None
+    if role in {"visitor", "agent", "admin"}:
+        return role
+    raise HTTPException(
+        status_code=401,
+        detail="برای استفاده از دستیار، کد دسترسی لازم است.",
+    )
 
 
 async def require_staff(authorization: str | None = Header(default=None)) -> str:
