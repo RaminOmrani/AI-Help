@@ -70,6 +70,15 @@
   .login .orb { width: 62px; height: 62px; font-size: 62px; margin: 0 auto 18px; }
 
   .credit { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+
+  .sec-warn {
+    border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+    border-radius: 16px; padding: 16px 20px; margin-bottom: 20px;
+  }
+  .sec-warn h4 { margin: 0 0 8px; font-size: 14.5px; color: var(--danger); }
+  .sec-warn ul { margin: 0; padding-inline-start: 20px; font-size: 13px; line-height: 2; }
+  .sec-warn code { font-size: 12px; }
 </style>
 </head>
 <body>
@@ -101,6 +110,7 @@
     <button class="btn btn-sm btn-ghost" id="outBtn">خروج</button>
   </header>
 
+  <div id="secWarn"></div>
   <div class="stats" id="stats"></div>
 
   <div class="tabs">
@@ -304,6 +314,24 @@ async function refreshStats() {
   $('#stats').innerHTML =
     cards.map(([v, l]) => `<div class="card stat"><b>${faDigits(v || 0)}</b><span>${l}</span></div>`).join('') +
     `<div class="card stat" id="creditCard"><b>—</b><span>اعتبار AvalAI</span></div>`;
+
+  const problems = data.security_issues || [];
+  $('#secWarn').innerHTML = problems.length
+    ? `<div class="sec-warn">
+         <h4>🔒 ${faDigits(problems.length)} مورد امنیتی — قبل از باز کردن روی اینترنت حل شود</h4>
+         <ul>${problems.map((p) => `<li>${escapeHtml(p.text)}</li>`).join('')}</ul>
+         <p class="muted tiny" style="margin:10px 0 0">
+           برای ساخت خودکار رمز و کلید امن، در پوشه‌ی پروژه این را اجرا کنید:<br>
+           <code dir="ltr">python scripts/preflight.py --fix --domain YOUR-DOMAIN</code>
+         </p>
+       </div>`
+    : '';
+
+  const limit = data.rate_limit || {};
+  if (limit.enabled) {
+    $('#modelInfo').textContent +=
+      ` · سقف ${faDigits(limit.per_minute)} سوال در دقیقه`;
+  }
 
   if (!data.api_key_set) {
     toast('کلید AvalAI ثبت نشده — از تب «کلید و مدل‌ها» واردش کنید.', 'err');

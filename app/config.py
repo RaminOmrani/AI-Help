@@ -99,6 +99,22 @@ ASSISTANT_NAME = _env("ASSISTANT_NAME", "میلی")
 SUPPORT_PHONE = _env("SUPPORT_PHONE", "")
 SUPPORT_HOURS = _env("SUPPORT_HOURS", "شنبه تا چهارشنبه، ۹ تا ۱۷")
 
+# ------------------------------------------------------------------
+# انتشار روی اینترنت
+# ------------------------------------------------------------------
+# دامنه‌هایی که اجازه دارند از مرورگر به این API وصل شوند.
+# خالی یعنی «همه» — فقط برای اجرای محلی مناسب است.
+ALLOWED_ORIGINS = [o.strip() for o in _env("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+
+# اگر پشت nginx / کلادفلر هستید true بگذارید تا آی‌پی واقعی کاربر از هدر خوانده شود.
+# اگر مستقیم در معرض اینترنت هستید حتماً false بماند، وگرنه هدر جعل می‌شود.
+TRUST_PROXY = _env("TRUST_PROXY", "false").lower() in {"1", "true", "yes", "on"}
+
+# محافظ اعتبار: سقف سوال برای هر آی‌پی
+RATE_LIMIT_ENABLED = _env("RATE_LIMIT_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+RATE_LIMIT_PER_MINUTE = _env_int("RATE_LIMIT_PER_MINUTE", 10)
+RATE_LIMIT_PER_DAY = _env_int("RATE_LIMIT_PER_DAY", 150)
+
 HOST = _env("HOST", "0.0.0.0")
 PORT = _env_int("PORT", 8000)
 # باز کردن خودکار مرورگر — فقط برای اجرای روی کامپیوتر شخصی

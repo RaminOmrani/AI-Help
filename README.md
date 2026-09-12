@@ -230,8 +230,9 @@ python scripts/compare_models.py --audience internal --ask "خطای اتصال 
 - **انتخاب مدل.** پیش‌فرض `gemini-3.7-flash` است — ارزان، تازه، و در بنچمارک‌های OCR
   و خواندن سند جزو بهترین‌هاست. `VISION_MODEL` حتماً باید مدلی باشد که تصویر می‌فهمد؛
   `python scripts/check_avalai.py` این را با یک تصویر آزمایشی تست می‌کند.
-- **انتشار روی سرور.** پشت nginx یا caddy با HTTPS قرار دهید. `SECRET_KEY` را حتماً عوض کنید،
-  و اگر صفحه‌ی مشتری عمومی است، `PORT` را فقط از طریق ریورس‌پروکسی باز بگذارید.
+- **انتشار روی سرور.** راهنمای کامل در [`DEPLOY.md`](DEPLOY.md) است — nginx، systemd، داکر،
+  گواهی HTTPS و چک‌لیست امنیتی. قبل از باز کردن روی دامنه‌ی عمومی حتماً این را بزنید:
+  `python scripts/preflight.py --fix --domain your-domain.com`
 - **پشتیبان‌گیری.** تمام داده‌ها در `data/support.db` و `data/uploads/` است؛ همین دو را بکاپ بگیرید.
 - **تغییر برند.** `BRAND_NAME`، `BRAND_PRODUCT`، `ASSISTANT_NAME` و `SUPPORT_PHONE` را در `.env` بگذارید.
 

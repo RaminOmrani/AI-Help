@@ -1,0 +1,52 @@
+# ============================================================
+#  systemd — دستیار پشتیبانی هوشمند
+#
+#  نصب:
+#    sudo cp deploy/aiassist.service /etc/systemd/system/
+#    sudo systemctl daemon-reload
+#    sudo systemctl enable --now aiassist
+#
+#  دستورهای روزمره:
+#    sudo systemctl status aiassist      وضعیت
+#    sudo systemctl restart aiassist     ری‌استارت بعد از git pull
+#    sudo journalctl -u aiassist -f      دیدن لاگ زنده
+# ============================================================
+
+[Unit]
+Description=Support AI Assistant (AvalAI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aiassist
+Group=aiassist
+WorkingDirectory=/opt/aiassist
+
+# uvicorn را مستقیم صدا می‌زنیم تا --proxy-headers را بتوانیم بدهیم.
+# --forwarded-allow-ips فقط به nginx روی همین ماشین اعتماد می‌کند.
+ExecStart=/opt/aiassist/venv/bin/uvicorn app.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --proxy-headers \
+    --forwarded-allow-ips 127.0.0.1
+
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+# لاگ‌ها به journald می‌روند
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=aiassist
+
+# ── سخت‌سازی: سرویس فقط به پوشه‌ی خودش دسترسی نوشتن دارد
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/aiassist/data
+
+[Install]
+WantedBy=multi-user.target

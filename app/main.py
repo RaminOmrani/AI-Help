@@ -9,18 +9,22 @@ import shutil
 import unicodedata
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import avalai, chat_service, config, db, diagnostics, ingest, prompts, rag, security, settings
+from . import (
+    avalai, chat_service, config, db, diagnostics, ingest, prompts,
+    rag, ratelimit, security, settings,
+)
 
 app = FastAPI(title="Support AI — AvalAI", version="3.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.ALLOWED_ORIGINS or ["*"],
+    allow_credentials=bool(config.ALLOWED_ORIGINS),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -111,7 +115,8 @@ async def bootstrap():
 
 
 @app.post("/api/chat")
-async def customer_chat(payload: ChatIn):
+async def customer_chat(payload: ChatIn, request: Request):
+    ratelimit.check(request)
     return StreamingResponse(
         chat_service.answer_stream(
             payload.message.strip(),
@@ -164,7 +169,8 @@ async def feedback(payload: FeedbackIn):
 
 
 @app.post("/api/ticket")
-async def create_ticket(payload: TicketIn):
+async def create_ticket(payload: TicketIn, request: Request):
+    ratelimit.check(request)
     conv = db.query_one(
         "SELECT id FROM conversations WHERE session_id = ? ORDER BY id DESC LIMIT 1",
         (payload.session_id,),
@@ -480,6 +486,8 @@ async def admin_stats(role: str = Depends(security.require_admin)):
     return {
         "index": rag.stats(),
         "usage": dict(counts),
+        "rate_limit": ratelimit.snapshot(),
+        "security_issues": security.security_issues(),
         "model": settings.chat_model(),
         "embedding_model": settings.embedding_model(),
         "vision_model": settings.vision_model(),
