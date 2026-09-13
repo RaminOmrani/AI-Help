@@ -13,60 +13,62 @@
 }
 
 :root {
-  /* رنگ‌های اصلی — سبزآبیِ آرام روی زمینه‌ی کرمِ گرم.
+  /* رنگ‌های اصلی — قرمزِ نشانِ میلیونر روی خاکستریِ خنثی، مثل سایت اصلی.
      همه‌ی ترکیب‌های متن/زمینه نسبت کنتراست ۴.۵:۱ (WCAG AA) را رد می‌کنند. */
-  --brand:        #0f7d76;   /* سبزآبی آرام — رنگ اصلی */
-  --brand-deep:   #0a5f5a;   /* تیره‌تر، برای گرادیان و حالت فشرده */
-  --brand-soft:   #d9efec;   /* پس‌زمینه‌ی ملایمِ برند */
+  --brand:        #a50f14;   /* قرمزِ برند — همان قرمز لوگو */
+  --brand-deep:   #7d0a0e;   /* زرشکیِ تیره — گرادیان و حالت فشرده */
+  --brand-soft:   #fdeaea;   /* پس‌زمینه‌ی ملایمِ برند */
   --on-brand:     #ffffff;   /* رنگ متن روی زمینه‌ی برند */
-  --accent:       #b45309;   /* کهربایی گرم — تأکید و نکته */
-  --accent-soft:  #fdf0dd;
+  --accent:       #2b2b31;   /* زغالی — دکمه‌ی ثانویه، مثل سایت */
+  --accent-soft:  #ededf0;
 
-  --bg:           #faf7f2;   /* کرم گرم، نه سفیدِ خیره‌کننده */
-  --bg-tint:      #f2ede5;
-  --panel:        rgba(255, 255, 255, .82);
+  --bg:           #f6f6f7;   /* خاکستریِ روشنِ خنثی */
+  --bg-tint:      #eeeef0;
+  --panel:        rgba(255, 255, 255, .86);
   --panel-solid:  #ffffff;
-  --border:       #e8e0d5;
-  --border-soft:  #f0eae1;
+  --border:       #e3e3e7;
+  --border-soft:  #eeeef1;
 
-  --text:         #2a2521;   /* مشکیِ گرم، نه مشکیِ آبی */
-  --muted:        #6f6660;
+  --text:         #1b1b1f;
+  --muted:        #66666e;
 
-  --ok:           #157f56;
-  --warn:         #a16207;
+  --ok:           #15803d;
+  --warn:         #b45309;
   --danger:       #c2410c;
 
-  --shadow:       0 14px 40px -22px rgba(58, 45, 32, .34);
-  --shadow-sm:    0 4px 14px -8px rgba(58, 45, 32, .28);
+  --shadow:       0 14px 40px -22px rgba(24, 24, 28, .30);
+  --shadow-sm:    0 4px 14px -8px rgba(24, 24, 28, .24);
   --radius:       20px;
   --radius-sm:    12px;
   --font:         'Vazirmatn', 'Segoe UI', Tahoma, system-ui, sans-serif;
 }
 
 [data-theme="dark"] {
-  --brand:        #4ecdc4;
-  --brand-deep:   #7ee0d8;
-  --brand-soft:   #17332f;
-  --on-brand:     #0a1f1d;   /* در حالت تیره، برند روشن است پس متن باید تیره باشد */
-  --accent:       #f0b45e;
-  --accent-soft:  #33291a;
+  /* در تم تیره قرمزِ سیر روی زمینه‌ی مشکی خوانا نیست، پس روشن‌ترش می‌کنیم
+     و به‌جایش متنِ روی برند تیره می‌شود. */
+  --brand:        #ff8085;
+  --brand-deep:   #ffa8ab;
+  --brand-soft:   #3a1418;
+  --on-brand:     #2a0508;
+  --accent:       #d8d8de;
+  --accent-soft:  #26262c;
 
-  --bg:           #191614;   /* زغالیِ گرم، نه سرمه‌ای */
-  --bg-tint:      #211d1a;
-  --panel:        rgba(34, 30, 27, .82);
-  --panel-solid:  #221e1b;
-  --border:       #352f2a;
-  --border-soft:  #2b2622;
+  --bg:           #131316;
+  --bg-tint:      #1a1a1e;
+  --panel:        rgba(28, 28, 33, .86);
+  --panel-solid:  #1c1c21;
+  --border:       #2c2c33;
+  --border-soft:  #24242a;
 
-  --text:         #f0ebe5;
-  --muted:        #a79e96;
+  --text:         #f2f2f4;
+  --muted:        #a1a1aa;
 
   --ok:           #4ade80;
   --warn:         #fbbf24;
   --danger:       #fb923c;
 
-  --shadow:       0 16px 44px -24px rgba(0, 0, 0, .8);
-  --shadow-sm:    0 4px 16px -10px rgba(0, 0, 0, .7);
+  --shadow:       0 16px 44px -24px rgba(0, 0, 0, .85);
+  --shadow-sm:    0 4px 16px -10px rgba(0, 0, 0, .75);
 }
 
 * { box-sizing: border-box; }
@@ -97,19 +99,19 @@ body {
   overflow: hidden;
   pointer-events: none;
   background:
-    radial-gradient(80vw 60vh at 78% -8%,  color-mix(in srgb, var(--brand) 12%, transparent), transparent 62%),
-    radial-gradient(70vw 55vh at 10% 105%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 60%);
+    radial-gradient(80vw 60vh at 78% -8%,  color-mix(in srgb, var(--brand) 7%, transparent), transparent 62%),
+    radial-gradient(70vw 55vh at 10% 105%, color-mix(in srgb, var(--brand-deep) 5%, transparent), transparent 60%);
 }
 .aurora span {
   position: absolute;
   display: block;
   border-radius: 50%;
   filter: blur(90px);
-  opacity: .16;
+  opacity: .10;
   animation: drift 30s ease-in-out infinite;
 }
 .aurora span:nth-child(1) { width: 40vw; height: 40vw; background: var(--brand);  top: -10vw; inset-inline-start: -8vw; }
-.aurora span:nth-child(2) { width: 32vw; height: 32vw; background: var(--accent); bottom: -12vw; inset-inline-end: -6vw; animation-delay: -10s; }
+.aurora span:nth-child(2) { width: 32vw; height: 32vw; background: var(--brand-deep); bottom: -12vw; inset-inline-end: -6vw; animation-delay: -10s; }
 .aurora span:nth-child(3) { display: none; }
 [data-theme="dark"] .aurora span { opacity: .12; }
 
@@ -227,6 +229,18 @@ a { color: var(--brand); }
   font-size: .55em;
 }
 .orb.thinking { animation: spin 2.4s linear infinite, breathe 2s ease-in-out infinite; }
+
+/* نشانِ شرکت به‌جای ایموجی: <div class="orb" data-logo></div>
+   برای گذاشتن لوگوی رسمی کافی است فایل web/assets/logo.svg عوض شود. */
+.orb[data-logo]::after {
+  content: '';
+  /* لوگو به‌صورت ماسک کشیده می‌شود تا رنگش همیشه از متغیر برند بیاید؛
+     در تم تیره قرمزِ سیر روی زمینه‌ی مشکی گم می‌شد. */
+  background: var(--brand);
+  -webkit-mask: url('/assets/logo.svg') center / 52% auto no-repeat;
+          mask: url('/assets/logo.svg') center / 52% auto no-repeat;
+}
+.orb[data-logo].thinking { animation: breathe 1.6s ease-in-out infinite; }
 
 @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
 @keyframes spin    { to { transform: rotate(360deg); } }

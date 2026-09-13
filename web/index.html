@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>دستیار هوشمند پشتیبانی</title>
+<title>میلیونر بات</title>
 <meta name="description" content="پاسخ سریع به سوال‌های شما درباره‌ی نرم‌افزار، بر پایه‌ی راهنماهای رسمی">
 <link rel="stylesheet" href="/assets/base.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
@@ -153,9 +153,9 @@
 
 <header class="topbar">
   <div class="brand">
-    <div class="orb" id="brandOrb" data-face="🤖"></div>
+    <div class="orb" id="brandOrb" data-logo></div>
     <div>
-      <b id="brandName">دستیار هوشمند</b>
+      <b id="brandName">میلیونر بات</b>
       <span class="muted" id="brandSub">همیشه بیدار، همیشه پاسخگو</span>
     </div>
   </div>
@@ -169,7 +169,7 @@
 <main id="main">
   <div class="stream" id="stream">
     <section class="hero" id="hero">
-      <div class="orb" data-face="🤖"></div>
+      <div class="orb" data-logo></div>
       <h1 id="heroTitle">سلام! چطور می‌تونم کمکت کنم؟</h1>
       <p id="heroSub">هر سوالی درباره‌ی نرم‌افزار داری بپرس — جواب رو از توی راهنماهای رسمی برات پیدا می‌کنم.</p>
       <div class="chips" id="chips"></div>
@@ -215,7 +215,7 @@ function showGate(message = '') {
   gate.className = 'gate';
   gate.innerHTML = `
     <div class="card">
-      <div class="orb" data-face="🔐"></div>
+      <div class="orb" data-logo></div>
       <h2>کد دسترسی</h2>
       <p>این دستیار فعلاً برای مشتریان و همکاران ${escapeHtml(info.brand || '')} است.<br>
          کد دسترسی را وارد کنید.</p>
@@ -253,9 +253,9 @@ function showGate(message = '') {
 
 try {
   info = await api('/api/bootstrap');
-  $('#brandName').textContent = `دستیار ${info.assistant || 'هوشمند'}`;
+  $('#brandName').textContent = info.assistant || 'میلیونر بات';
   $('#brandSub').textContent  = info.product || '';
-  document.title = `دستیار هوشمند ${info.brand || ''}`.trim();
+  document.title = info.assistant || 'میلیونر بات';
   if (info.welcome) $('#heroSub').textContent = info.welcome;
   renderChips(info.suggestions || []);
   if (!info.ready) {
@@ -283,7 +283,7 @@ function addMessage(role, html) {
   const el = document.createElement('div');
   el.className = `msg ${role}`;
   el.innerHTML =
-    (role === 'bot' ? '<div class="orb" data-face="🤖"></div>' : '') +
+    (role === 'bot' ? '<div class="orb" data-logo></div>' : '') +
     `<div class="bubble"><div class="md">${html}</div><div class="meta" hidden></div></div>`;
   stream.appendChild(el);
   scroll();
@@ -501,7 +501,7 @@ $('#humanBtn').addEventListener('click', () => {
           contact: back.querySelector('#tContact').value,
           body,
           session_id: store.session,
-          subject: 'درخواست تماس از دستیار هوشمند',
+          subject: 'درخواست تماس از میلیونر بات',
         },
       });
       close();

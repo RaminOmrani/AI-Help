@@ -122,7 +122,7 @@
 
 <div class="login" id="login" hidden>
   <div class="card">
-    <div class="orb" data-face="🛠️"></div>
+    <div class="orb" data-logo></div>
     <h2>کنسول پشتیبانی</h2>
     <p class="muted">برای ورود رمز عبور کارشناس را وارد کنید.</p>
     <input class="field" id="pw" type="password" placeholder="رمز عبور" style="text-align:center">
@@ -134,7 +134,7 @@
 <div class="app" id="app" hidden>
   <header class="topbar">
     <div class="brand">
-      <div class="orb" data-face="🛠️"></div>
+      <div class="orb" data-logo></div>
       <div>
         <b>کنسول پشتیبانی</b>
         <div class="muted tiny" id="stats">—</div>
@@ -153,7 +153,7 @@
       <div class="scroll" id="scroll">
         <div class="inner" id="stream">
           <div class="empty" id="empty">
-            <div class="orb" data-face="🛠️"></div>
+            <div class="orb" data-logo></div>
             <h2>سوال فنی‌ات را بپرس</h2>
             <p id="welcome">پاسخ را با ارجاع دقیق به فایل و شماره‌ی صفحه می‌دهم.</p>
             <div class="qgrid" id="qgrid"></div>
@@ -315,7 +315,7 @@ function addBot() {
   const el = document.createElement('div');
   el.className = 'msg bot';
   el.innerHTML =
-    '<div class="row"><div class="orb" data-face="🛠️"></div>' +
+    '<div class="row"><div class="orb" data-logo></div>' +
     '<div class="content"><div class="md"><div class="thinking"><span class="dots"><i></i><i></i><i></i></span> در حال جستجو در مستندات…</div></div>' +
     '<div class="actions" hidden></div></div></div>';
   stream.appendChild(el);

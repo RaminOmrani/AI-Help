@@ -95,7 +95,7 @@ SESSION_HOURS = _env_int("SESSION_HOURS", 24)
 # ------------------------------------------------------------------
 BRAND_NAME = _env("BRAND_NAME", "میلیونر")
 BRAND_PRODUCT = _env("BRAND_PRODUCT", "نرم‌افزار حسابداری و فروشگاهی میلیونر")
-ASSISTANT_NAME = _env("ASSISTANT_NAME", "میلی")
+ASSISTANT_NAME = _env("ASSISTANT_NAME", "میلیونر بات")
 SUPPORT_PHONE = _env("SUPPORT_PHONE", "")
 SUPPORT_HOURS = _env("SUPPORT_HOURS", "شنبه تا چهارشنبه، ۹ تا ۱۷")
 
