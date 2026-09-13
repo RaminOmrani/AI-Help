@@ -195,25 +195,28 @@
         <div style="display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))">
           <div>
             <label>مدل پاسخ‌دهی</label>
-            <input class="field" id="ai_chat" style="width:100%;direction:ltr;text-align:left">
+            <input class="field" id="ai_chat" list="modelOptions" style="width:100%;direction:ltr;text-align:left">
             <p class="muted tiny" style="margin:5px 0 0">جواب دادن به سوال‌ها</p>
           </div>
           <div>
             <label>مدل بینایی</label>
-            <input class="field" id="ai_vision" style="width:100%;direction:ltr;text-align:left">
+            <input class="field" id="ai_vision" list="modelOptions" style="width:100%;direction:ltr;text-align:left">
             <p class="muted tiny" style="margin:5px 0 0">خواندن اسکرین‌شات‌های داخل PDF</p>
           </div>
           <div>
             <label>مدل سبک</label>
-            <input class="field" id="ai_fast" style="width:100%;direction:ltr;text-align:left">
+            <input class="field" id="ai_fast" list="modelOptions" style="width:100%;direction:ltr;text-align:left">
             <p class="muted tiny" style="margin:5px 0 0">بازسازی متن و بازنویسی لحن</p>
           </div>
           <div>
             <label>مدل بردارسازی</label>
-            <input class="field" id="ai_embed" style="width:100%;direction:ltr;text-align:left">
+            <input class="field" id="ai_embed" list="modelOptions" style="width:100%;direction:ltr;text-align:left">
             <p class="muted tiny" style="margin:5px 0 0">جستجوی معنایی در مستندات</p>
           </div>
         </div>
+
+        <datalist id="modelOptions"></datalist>
+        <p class="muted tiny" id="modelsNote" style="margin:-4px 0 0"></p>
 
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500">
           <input type="checkbox" id="ai_vision_on"> خواندن اسکرین‌شات‌های داخل PDF فعال باشد
@@ -588,6 +591,27 @@ async function loadAiSettings() {
     : a.api_key_from_env
       ? 'کلید فعلی از فایل .env خوانده می‌شود. اگر اینجا کلید بگذارید، جایگزین می‌شود.'
       : 'کلید در پنل ثبت شده است. برای تغییر، کلید جدید را وارد کنید.';
+  if (a.api_key_set) loadModelList();
+}
+
+/* فهرستِ مدل‌هایی که روی همین حساب واقعاً فعال‌اند.
+   بدون این، نام مدل باید از حفظ تایپ شود و یک غلط تایپی تا زمان
+   «تست اتصال» معلوم نمی‌شود. */
+let modelsLoaded = false;
+async function loadModelList() {
+  if (modelsLoaded) return;
+  const note = $('#modelsNote');
+  try {
+    const { models } = await api('/api/admin/models', { auth: true });
+    if (!models || !models.length) return;
+    $('#modelOptions').innerHTML =
+      models.map(m => `<option value="${escapeHtml(m)}"></option>`).join('');
+    modelsLoaded = true;
+    note.textContent =
+      `${models.length} مدل روی این حساب فعال است — داخل هر کادر کلیک کنید تا فهرست باز شود.`;
+  } catch (err) {
+    note.textContent = `فهرست مدل‌ها خوانده نشد: ${err.message}`;
+  }
 }
 
 $('#aiSave').addEventListener('click', async () => {
