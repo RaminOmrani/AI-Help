@@ -38,7 +38,7 @@ AVALAI_BASE_URL = _env("AVALAI_BASE_URL", "https://api.avalai.ir/v1").rstrip("/"
 # اندپوینت اعتبار خارج از /v1 است
 AVALAI_CREDIT_URL = _env("AVALAI_CREDIT_URL", "https://api.avalai.ir/user/v1/credit")
 
-CHAT_MODEL = _env("CHAT_MODEL", "gemini-3.7-flash")
+CHAT_MODEL = _env("CHAT_MODEL", "gemini-3.8-flash")
 FAST_MODEL = _env("FAST_MODEL", CHAT_MODEL)
 VISION_MODEL = _env("VISION_MODEL", CHAT_MODEL)
 EMBEDDING_MODEL = _env("EMBEDDING_MODEL", "text-embedding-3-large")

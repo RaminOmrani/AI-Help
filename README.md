@@ -139,7 +139,7 @@ python scripts/check_avalai.py
 مستندات و سوال‌های واقعی خودتان مقایسه کنید:
 
 ```bash
-python scripts/compare_models.py gemini-3.7-flash gemini-3.5-flash
+python scripts/compare_models.py gemini-3.8-flash gemini-3.7-flash
 ```
 
 هر مدل چند سوال واقعی را از مسیر کامل RAG رد می‌کند و خروجی شامل **هزینه‌ی واقعی تومانی**
@@ -227,7 +227,7 @@ python scripts/compare_models.py --audience internal --ask "خطای اتصال 
   اگر نمی‌خواهید، تیک «خواندن متن و تصویرهای فایل با هوش مصنوعی» را بردارید یا `VISION_ENABLED=false` بگذارید.
 - **سقف امن.** هر فایل حداکثر `VISION_MAX_PAGES` صفحه (پیش‌فرض ۳۰۰) تصویری خوانده می‌شود.
   اگر فایل بزرگ‌تر بود، در لاگ سرور صریحاً گزارش می‌شود که چند صفحه خوانده نشده.
-- **انتخاب مدل.** پیش‌فرض `gemini-3.7-flash` است — ارزان، تازه، و در بنچمارک‌های OCR
+- **انتخاب مدل.** پیش‌فرض `gemini-3.8-flash` است — ارزان، تازه، و در بنچمارک‌های OCR
   و خواندن سند جزو بهترین‌هاست. `VISION_MODEL` حتماً باید مدلی باشد که تصویر می‌فهمد؛
   `python scripts/check_avalai.py` این را با یک تصویر آزمایشی تست می‌کند.
 - **انتشار روی سرور.** راهنمای کامل در [`DEPLOY.md`](DEPLOY.md) است — nginx، systemd، داکر،
