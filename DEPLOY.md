@@ -80,6 +80,19 @@ sudo -u aiassist venv/bin/python scripts/preflight.py \
 ```
 
 **رمزهایی که چاپ می‌شوند را همان لحظه جایی امن ذخیره کنید** — دیگر نشانشان نمی‌دهد.
+اگر جا ماندند، در `.env` هستند:
+
+```bash
+grep -E '^(ADMIN_PASSWORD|AGENT_PASSWORD)=' /opt/aiassist/.env
+```
+
+**اگر رمز دلخواه خودتان را می‌خواهید** (به‌جای رمز تصادفی)، این را اجرا کنید و رمز را
+دو بار تایپ کنید — حروف فارسی هم قبول است:
+
+```bash
+sudo -u aiassist python3 scripts/setpass.py
+sudo systemctl restart aiassist
+```
 
 ### ۵. اجرا به‌عنوان سرویس
 
