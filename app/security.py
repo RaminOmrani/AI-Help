@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 import time
 
 from fastapi import Header, HTTPException
@@ -64,6 +65,40 @@ def verify_token(token: str) -> str | None:
     if data.get("exp", 0) < time.time():
         return None
     return data.get("role")
+
+
+# ------------------------------------------------------------------
+# شناسه‌ی مالکیتِ گفتگو
+# ------------------------------------------------------------------
+# گفتگوها نام کاربری ندارند؛ به یک شناسه‌ی مرورگر بسته‌اند. اگر آن شناسه را
+# خودِ مرورگر بسازد و در پارامتر بفرستد، هر کسی می‌تواند شناسه‌ی دیگری را
+# بگذارد و گفتگوهای او را بخواند یا پاک کند. پس شناسه را سرور می‌سازد و
+# امضا می‌کند؛ بدون SECRET_KEY نمی‌شود شناسه‌ی جعلی ساخت.
+def create_client_key() -> str:
+    """کلید تازه برای یک مرورگر: «شناسه.امضا»"""
+    client_id = secrets.token_urlsafe(18)
+    return f"{client_id}.{_sign(client_id.encode())}"
+
+
+def client_id_from_key(key: str | None) -> str:
+    """اگر امضا درست بود شناسه را برمی‌گرداند، وگرنه رشته‌ی خالی."""
+    if not key or "." not in key:
+        return ""
+    client_id, signature = key.rsplit(".", 1)
+    if not client_id or not hmac.compare_digest(signature, _sign(client_id.encode())):
+        return ""
+    return client_id
+
+
+async def require_client(x_client_key: str | None = Header(default=None)) -> str:
+    """شناسه‌ی تأییدشده‌ی مرورگر — برای هر مسیری که به گفتگوها دست می‌زند."""
+    client_id = client_id_from_key(x_client_key)
+    if not client_id:
+        raise HTTPException(
+            status_code=401,
+            detail="شناسه‌ی این مرورگر معتبر نیست. صفحه را تازه کنید.",
+        )
+    return client_id
 
 
 def login(role: str, password: str) -> str:

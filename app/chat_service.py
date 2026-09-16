@@ -11,14 +11,27 @@ from . import avalai, config, db, prompts, rag
 HISTORY_TURNS = 6
 
 
-def get_or_create_conversation(session_id: str, audience: str, client_id: str = "") -> int:
+def find_conversation(session_id: str, audience: str, client_id: str) -> int | None:
+    """شناسه‌ی گفتگو، فقط اگر متعلق به همین مرورگر باشد.
+
+    client_id هم در شرط هست تا کسی با حدس زدن session_id نتواند گفتگوی
+    دیگری را بخواند، ادامه بدهد یا پاک کند.
+    """
+    if not client_id:
+        return None
     row = db.query_one(
-        "SELECT id FROM conversations WHERE session_id = ? AND audience = ? "
+        "SELECT id FROM conversations "
+        "WHERE session_id = ? AND audience = ? AND client_id = ? "
         "ORDER BY id DESC LIMIT 1",
-        (session_id, audience),
+        (session_id, audience, client_id),
     )
-    if row:
-        return row["id"]
+    return row["id"] if row else None
+
+
+def get_or_create_conversation(session_id: str, audience: str, client_id: str = "") -> int:
+    existing = find_conversation(session_id, audience, client_id)
+    if existing is not None:
+        return existing
     return db.execute(
         "INSERT INTO conversations(session_id, client_id, audience) VALUES (?, ?, ?)",
         (session_id, client_id, audience),
@@ -49,10 +62,13 @@ async def answer_stream(
     """جریان پاسخ به صورت SSE — رویدادها: sources | delta | done | error"""
     started = time.time()
     conv_id = get_or_create_conversation(session_id, audience, client_id)
-    db.execute(
+    user_message_id = db.execute(
         "INSERT INTO messages(conv_id, role, content) VALUES (?, 'user', ?)",
         (conv_id, question),
     )
+    # شناسه‌ی پیام کاربر را همان اول می‌فرستیم تا رابط کاربری بتواند
+    # «ویرایش و ارسال دوباره» را روی همین پیام ببندد.
+    yield _sse({"type": "user", "message_id": user_message_id})
 
     try:
         hits = await rag.search(question, audience=audience)
@@ -62,16 +78,10 @@ async def answer_stream(
 
     sources = [h.as_source() for h in hits]
     grounded = bool(hits)
-    # برای مشتری، منابع فقط به شکل عنوان کلی نمایش داده می‌شوند
+    # مشتری هیچ ارجاعی نمی‌بیند — نه عنوان فایل، نه شماره‌ی صفحه.
+    # منابع فقط برای کارشناس پشتیبانی فرستاده می‌شوند.
     if audience == "public":
-        public_sources = []
-        seen = set()
-        for s in sources:
-            if s["title"] in seen:
-                continue
-            seen.add(s["title"])
-            public_sources.append({"title": s["title"], "id": s["id"]})
-        yield _sse({"type": "sources", "sources": public_sources, "grounded": grounded})
+        yield _sse({"type": "sources", "sources": [], "grounded": grounded})
     else:
         status = rag.semantic_status()
         yield _sse({
@@ -156,20 +166,16 @@ async def answer_stream(
 # ------------------------------------------------------------------
 # سابقه‌ی گفتگو برای رابط کاربری
 # ------------------------------------------------------------------
-def conversation_messages(session_id: str, audience: str) -> list[dict]:
+def conversation_messages(session_id: str, audience: str, client_id: str) -> list[dict]:
     """پیام‌های گفتگوی جاری، برای بازگرداندن بعد از رفرش صفحه."""
-    conv = db.query_one(
-        "SELECT id FROM conversations WHERE session_id = ? AND audience = ? "
-        "ORDER BY id DESC LIMIT 1",
-        (session_id, audience),
-    )
-    if not conv:
+    conv_id = find_conversation(session_id, audience, client_id)
+    if conv_id is None:
         return []
 
     rows = db.query(
         "SELECT id, role, content, sources, grounded, feedback "
         "FROM messages WHERE conv_id = ? ORDER BY id",
-        (conv["id"],),
+        (conv_id,),
     )
     messages = []
     for row in rows:
@@ -178,13 +184,7 @@ def conversation_messages(session_id: str, audience: str) -> list[dict]:
         except json.JSONDecodeError:
             sources = []
         if audience == "public":
-            seen, trimmed = set(), []
-            for source in sources:
-                if source.get("title") in seen:
-                    continue
-                seen.add(source.get("title"))
-                trimmed.append({"title": source.get("title"), "id": source.get("id")})
-            sources = trimmed
+            sources = []   # مشتری ارجاع نمی‌بیند
         messages.append({
             "id": row["id"],
             "role": row["role"],
@@ -194,6 +194,37 @@ def conversation_messages(session_id: str, audience: str) -> list[dict]:
             "feedback": row["feedback"],
         })
     return messages
+
+
+def rewind_to(session_id: str, audience: str, client_id: str, message_id: int) -> bool:
+    """پیام کاربر و هر چه بعدش آمده را پاک می‌کند.
+
+    برای «ویرایش و ارسال دوباره»: مثل محیط‌های چت، نسخه‌ی قبلیِ سوال و
+    پاسخش کنار می‌روند و گفتگو از همان نقطه دوباره جلو می‌رود.
+    """
+    conv_id = find_conversation(session_id, audience, client_id)
+    if conv_id is None:
+        return False
+    target = db.query_one(
+        "SELECT id FROM messages WHERE id = ? AND conv_id = ?",
+        (message_id, conv_id),
+    )
+    if not target:
+        return False
+    db.execute("DELETE FROM messages WHERE conv_id = ? AND id >= ?", (conv_id, message_id))
+    return True
+
+
+def message_belongs_to(message_id: int, client_id: str) -> bool:
+    """آیا این پیام در گفتگوی همین مرورگر است؟ (برای بازخورد)"""
+    if not client_id:
+        return False
+    row = db.query_one(
+        "SELECT m.id FROM messages m JOIN conversations c ON c.id = m.conv_id "
+        "WHERE m.id = ? AND c.client_id = ?",
+        (message_id, client_id),
+    )
+    return bool(row)
 
 
 def recent_conversations(client_id: str, audience: str, limit: int = 30) -> list[dict]:

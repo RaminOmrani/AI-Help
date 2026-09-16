@@ -110,14 +110,12 @@ export const store = {
   get tokenKey() { return `ai_token_${tokenScope}`; },
   get token()  { return localStorage.getItem(this.tokenKey) || ''; },
   set token(v) { v ? localStorage.setItem(this.tokenKey, v) : localStorage.removeItem(this.tokenKey); },
-  /** شناسه‌ی پایدار مرورگر — با «گفتگوی جدید» عوض نمی‌شود، پس سابقه حفظ می‌ماند. */
-  get client() {
-    let id = localStorage.getItem('ai_client');
-    if (!id) {
-      id = crypto.randomUUID?.() || String(Date.now() + Math.random());
-      localStorage.setItem('ai_client', id);
-    }
-    return id;
+  /** کلید پایدار مرورگر — سرور می‌سازد و امضا می‌کند.
+   *  با «گفتگوی جدید» عوض نمی‌شود، پس سابقه حفظ می‌ماند. چون امضا دست
+   *  سرور است، کسی نمی‌تواند کلید دیگری بسازد و گفتگوهای او را بخواند. */
+  get client() { return localStorage.getItem('ai_client_key') || ''; },
+  set client(v) {
+    v ? localStorage.setItem('ai_client_key', v) : localStorage.removeItem('ai_client_key');
   },
   get session() {
     let id = localStorage.getItem('ai_session');
@@ -141,6 +139,7 @@ export const store = {
 export async function api(path, { method = 'GET', body, auth = false, soft = false } = {}) {
   const headers = {};
   if (auth) headers.Authorization = `Bearer ${store.token}`;
+  if (store.client) headers['X-Client-Key'] = store.client;
   if (body && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
 
   const res = await fetch(path, {
@@ -162,10 +161,22 @@ export async function api(path, { method = 'GET', body, auth = false, soft = fal
   return res.json();
 }
 
+/** یک بار در شروعِ هر صفحه: اگر کلید نداریم از سرور بگیر.
+ *  بدون کلید، مسیرهای گفتگو ۴۰۱ می‌دهند. */
+export async function ensureClientKey() {
+  if (store.client) return store.client;
+  try {
+    const res = await fetch('/api/client-key', { method: 'POST' });
+    if (res.ok) store.client = (await res.json()).key || '';
+  } catch { /* آفلاین — صفحه خودش خطا را نشان می‌دهد */ }
+  return store.client;
+}
+
 /* ---------- استریم SSE ---------- */
 export async function streamChat(path, payload, handlers, { auth = false, onUnauthorized } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (auth) headers.Authorization = `Bearer ${store.token}`;
+  if (store.client) headers['X-Client-Key'] = store.client;
 
   let res;
   try {
