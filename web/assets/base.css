@@ -237,8 +237,9 @@ a { color: var(--brand); }
   /* لوگو به‌صورت ماسک کشیده می‌شود تا رنگش همیشه از متغیر برند بیاید؛
      در تم تیره قرمزِ سیر روی زمینه‌ی مشکی گم می‌شد. */
   background: var(--brand);
-  -webkit-mask: url('/assets/logo.svg') center / 52% auto no-repeat;
-          mask: url('/assets/logo.svg') center / 52% auto no-repeat;
+  /* نشان رسمی بلندتر از پهناست، پس اندازه را با ارتفاع می‌بندیم تا از گوی بیرون نزند */
+  -webkit-mask: url('/assets/logo.svg') center / auto 50% no-repeat;
+          mask: url('/assets/logo.svg') center / auto 50% no-repeat;
 }
 .orb[data-logo].thinking { animation: breathe 1.6s ease-in-out infinite; }
 
