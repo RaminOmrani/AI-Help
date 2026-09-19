@@ -70,6 +70,15 @@
   .login .orb { width: 62px; height: 62px; font-size: 62px; margin: 0 auto 18px; }
 
   .credit { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+
+  .sec-warn {
+    border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+    background: color-mix(in srgb, var(--danger) 8%, transparent);
+    border-radius: 16px; padding: 16px 20px; margin-bottom: 20px;
+  }
+  .sec-warn h4 { margin: 0 0 8px; font-size: 14.5px; color: var(--danger); }
+  .sec-warn ul { margin: 0; padding-inline-start: 20px; font-size: 13px; line-height: 2; }
+  .sec-warn code { font-size: 12px; }
 </style>
 </head>
 <body>
@@ -77,7 +86,7 @@
 
 <div class="login" id="login" hidden>
   <div class="card">
-    <div class="orb" data-face="📚"></div>
+    <div class="orb" data-logo></div>
     <h2 style="margin:0 0 6px;font-size:19px">پنل مدیریت دانش</h2>
     <p class="muted" style="margin:0 0 22px;font-size:13px">رمز مدیر را وارد کنید.</p>
     <input class="field" id="pw" type="password" placeholder="رمز عبور" style="text-align:center">
@@ -88,7 +97,7 @@
 <div class="wrap" id="app" hidden>
   <header class="topbar">
     <div class="brand">
-      <div class="orb" data-face="📚"></div>
+      <div class="orb" data-logo></div>
       <div>
         <b>پنل مدیریت دانش</b>
         <div class="muted tiny" id="modelInfo">—</div>
@@ -101,6 +110,7 @@
     <button class="btn btn-sm btn-ghost" id="outBtn">خروج</button>
   </header>
 
+  <div id="secWarn"></div>
   <div class="stats" id="stats"></div>
 
   <div class="tabs">
@@ -185,25 +195,28 @@
         <div style="display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr))">
           <div>
             <label>مدل پاسخ‌دهی</label>
-            <input class="field" id="ai_chat" style="width:100%;direction:ltr;text-align:left">
+            <input class="field" id="ai_chat" list="modelOptions" style="width:100%;direction:ltr;text-align:left">
             <p class="muted tiny" style="margin:5px 0 0">جواب دادن به سوال‌ها</p>
           </div>
           <div>
             <label>مدل بینایی</label>
-            <input class="field" id="ai_vision" style="width:100%;direction:ltr;text-align:left">
+            <input class="field" id="ai_vision" list="modelOptions" style="width:100%;direction:ltr;text-align:left">
             <p class="muted tiny" style="margin:5px 0 0">خواندن اسکرین‌شات‌های داخل PDF</p>
           </div>
           <div>
             <label>مدل سبک</label>
-            <input class="field" id="ai_fast" style="width:100%;direction:ltr;text-align:left">
+            <input class="field" id="ai_fast" list="modelOptions" style="width:100%;direction:ltr;text-align:left">
             <p class="muted tiny" style="margin:5px 0 0">بازسازی متن و بازنویسی لحن</p>
           </div>
           <div>
             <label>مدل بردارسازی</label>
-            <input class="field" id="ai_embed" style="width:100%;direction:ltr;text-align:left">
+            <input class="field" id="ai_embed" list="modelOptions" style="width:100%;direction:ltr;text-align:left">
             <p class="muted tiny" style="margin:5px 0 0">جستجوی معنایی در مستندات</p>
           </div>
         </div>
+
+        <datalist id="modelOptions"></datalist>
+        <p class="muted tiny" id="modelsNote" style="margin:-4px 0 0"></p>
 
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500">
           <input type="checkbox" id="ai_vision_on"> خواندن اسکرین‌شات‌های داخل PDF فعال باشد
@@ -213,6 +226,31 @@
           <button class="btn btn-primary" id="aiSave">ذخیره</button>
           <button class="btn" id="aiTest">🔌 تست اتصال</button>
         </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:22px;margin-bottom:16px">
+      <div class="settings-grid">
+        <div>
+          <label>دسترسی به صفحه‌ی مشتری</label>
+          <div class="seg" id="accessSeg" style="margin-top:4px">
+            <button data-mode="code">🔐 فقط با کد دسترسی</button>
+            <button data-mode="open">🌐 باز برای همه</button>
+          </div>
+          <p class="muted tiny" style="margin:8px 0 0" id="accessNote"></p>
+        </div>
+
+        <div id="codesBox">
+          <label>کدهای دسترسی — هر کد در یک خط</label>
+          <textarea class="field" id="accessCodes" style="min-height:90px;direction:ltr;text-align:left"
+                    placeholder="MIL-1404&#10;TEAM-SUPPORT"></textarea>
+          <p class="muted tiny" style="margin:6px 0 0">
+            می‌توانید برای هر گروه کد جدا بدهید (مثلاً یکی برای همکاران، یکی برای مشتریان).
+            برای باطل کردن یک کد، کافی است خطش را پاک کنید.
+          </p>
+        </div>
+
+        <div><button class="btn btn-primary" id="accessSave">ذخیره‌ی دسترسی</button></div>
       </div>
     </div>
 
@@ -304,6 +342,24 @@ async function refreshStats() {
   $('#stats').innerHTML =
     cards.map(([v, l]) => `<div class="card stat"><b>${faDigits(v || 0)}</b><span>${l}</span></div>`).join('') +
     `<div class="card stat" id="creditCard"><b>—</b><span>اعتبار AvalAI</span></div>`;
+
+  const problems = data.security_issues || [];
+  $('#secWarn').innerHTML = problems.length
+    ? `<div class="sec-warn">
+         <h4>🔒 ${faDigits(problems.length)} مورد امنیتی — قبل از باز کردن روی اینترنت حل شود</h4>
+         <ul>${problems.map((p) => `<li>${escapeHtml(p.text)}</li>`).join('')}</ul>
+         <p class="muted tiny" style="margin:10px 0 0">
+           برای ساخت خودکار رمز و کلید امن، در پوشه‌ی پروژه این را اجرا کنید:<br>
+           <code dir="ltr">python scripts/preflight.py --fix --domain YOUR-DOMAIN</code>
+         </p>
+       </div>`
+    : '';
+
+  const limit = data.rate_limit || {};
+  if (limit.enabled) {
+    $('#modelInfo').textContent +=
+      ` · سقف ${faDigits(limit.per_minute)} سوال در دقیقه`;
+  }
 
   if (!data.api_key_set) {
     toast('کلید AvalAI ثبت نشده — از تب «کلید و مدل‌ها» واردش کنید.', 'err');
@@ -527,11 +583,35 @@ async function loadAiSettings() {
   $('#ai_fast').value = a.fast_model;
   $('#ai_embed').value = a.embedding_model;
   $('#ai_vision_on').checked = a.vision_enabled;
+  accessMode = a.public_access_mode || 'open';
+  $('#accessCodes').value = a.public_access_codes || '';
+  paintAccess();
   $('#keyNote').textContent = !a.api_key_set
     ? 'هنوز کلیدی ثبت نشده — بدون آن هیچ پاسخی داده نمی‌شود.'
     : a.api_key_from_env
       ? 'کلید فعلی از فایل .env خوانده می‌شود. اگر اینجا کلید بگذارید، جایگزین می‌شود.'
       : 'کلید در پنل ثبت شده است. برای تغییر، کلید جدید را وارد کنید.';
+  if (a.api_key_set) loadModelList();
+}
+
+/* فهرستِ مدل‌هایی که روی همین حساب واقعاً فعال‌اند.
+   بدون این، نام مدل باید از حفظ تایپ شود و یک غلط تایپی تا زمان
+   «تست اتصال» معلوم نمی‌شود. */
+let modelsLoaded = false;
+async function loadModelList() {
+  if (modelsLoaded) return;
+  const note = $('#modelsNote');
+  try {
+    const { models } = await api('/api/admin/models', { auth: true });
+    if (!models || !models.length) return;
+    $('#modelOptions').innerHTML =
+      models.map(m => `<option value="${escapeHtml(m)}"></option>`).join('');
+    modelsLoaded = true;
+    note.textContent =
+      `${models.length} مدل روی این حساب فعال است — داخل هر کادر کلیک کنید تا فهرست باز شود.`;
+  } catch (err) {
+    note.textContent = `فهرست مدل‌ها خوانده نشد: ${err.message}`;
+  }
 }
 
 $('#aiSave').addEventListener('click', async () => {
@@ -550,6 +630,36 @@ $('#aiSave').addEventListener('click', async () => {
     toast('ذخیره شد ✓', 'ok');
     await loadAiSettings();
     refreshStats();
+  } catch (err) { toast(err.message, 'err'); }
+});
+
+/* ---------- دسترسی به صفحه‌ی مشتری ---------- */
+let accessMode = 'open';
+
+function paintAccess() {
+  $$('#accessSeg button').forEach((b) => b.classList.toggle('on', b.dataset.mode === accessMode));
+  $('#codesBox').hidden = accessMode !== 'code';
+  $('#accessNote').textContent = accessMode === 'code'
+    ? 'فقط کسانی که کد دارند می‌توانند از دستیار استفاده کنند. کنسول پشتیبان و پنل مدیریت رمز جدای خودشان را دارند.'
+    : 'هر کسی که آدرس را داشته باشد می‌تواند سوال بپرسد. محافظت فقط سقف تعداد سوال است.';
+}
+
+$$('#accessSeg button').forEach((b) =>
+  b.addEventListener('click', () => { accessMode = b.dataset.mode; paintAccess(); })
+);
+
+$('#accessSave').addEventListener('click', async () => {
+  const codes = $('#accessCodes').value.trim();
+  if (accessMode === 'code' && !codes) {
+    toast('حداقل یک کد دسترسی بنویسید، وگرنه هیچ‌کس نمی‌تواند وارد شود.', 'err');
+    return;
+  }
+  try {
+    await api('/api/admin/ai-settings', {
+      method: 'PUT', auth: true,
+      body: { public_access_mode: accessMode, public_access_codes: codes },
+    });
+    toast('تنظیمات دسترسی ذخیره شد ✓', 'ok');
   } catch (err) { toast(err.message, 'err'); }
 });
 

@@ -110,14 +110,12 @@ export const store = {
   get tokenKey() { return `ai_token_${tokenScope}`; },
   get token()  { return localStorage.getItem(this.tokenKey) || ''; },
   set token(v) { v ? localStorage.setItem(this.tokenKey, v) : localStorage.removeItem(this.tokenKey); },
-  /** شناسه‌ی پایدار مرورگر — با «گفتگوی جدید» عوض نمی‌شود، پس سابقه حفظ می‌ماند. */
-  get client() {
-    let id = localStorage.getItem('ai_client');
-    if (!id) {
-      id = crypto.randomUUID?.() || String(Date.now() + Math.random());
-      localStorage.setItem('ai_client', id);
-    }
-    return id;
+  /** کلید پایدار مرورگر — سرور می‌سازد و امضا می‌کند.
+   *  با «گفتگوی جدید» عوض نمی‌شود، پس سابقه حفظ می‌ماند. چون امضا دست
+   *  سرور است، کسی نمی‌تواند کلید دیگری بسازد و گفتگوهای او را بخواند. */
+  get client() { return localStorage.getItem('ai_client_key') || ''; },
+  set client(v) {
+    v ? localStorage.setItem('ai_client_key', v) : localStorage.removeItem('ai_client_key');
   },
   get session() {
     let id = localStorage.getItem('ai_session');
@@ -138,9 +136,10 @@ export const store = {
 };
 
 /* ---------- درخواست‌ها ---------- */
-export async function api(path, { method = 'GET', body, auth = false } = {}) {
+export async function api(path, { method = 'GET', body, auth = false, soft = false } = {}) {
   const headers = {};
   if (auth) headers.Authorization = `Bearer ${store.token}`;
+  if (store.client) headers['X-Client-Key'] = store.client;
   if (body && !(body instanceof FormData)) headers['Content-Type'] = 'application/json';
 
   const res = await fetch(path, {
@@ -149,7 +148,8 @@ export async function api(path, { method = 'GET', body, auth = false } = {}) {
     body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
   });
 
-  if (auth && (res.status === 401 || res.status === 403)) {
+  // soft یعنی صفحه خودش ۴۰۱ را مدیریت می‌کند (مثل صفحه‌ی قفل مشتری)
+  if (auth && !soft && (res.status === 401 || res.status === 403)) {
     store.token = '';
     location.reload();
   }
@@ -161,16 +161,32 @@ export async function api(path, { method = 'GET', body, auth = false } = {}) {
   return res.json();
 }
 
+/** یک بار در شروعِ هر صفحه: اگر کلید نداریم از سرور بگیر.
+ *  بدون کلید، مسیرهای گفتگو ۴۰۱ می‌دهند. */
+export async function ensureClientKey() {
+  if (store.client) return store.client;
+  try {
+    const res = await fetch('/api/client-key', { method: 'POST' });
+    if (res.ok) store.client = (await res.json()).key || '';
+  } catch { /* آفلاین — صفحه خودش خطا را نشان می‌دهد */ }
+  return store.client;
+}
+
 /* ---------- استریم SSE ---------- */
-export async function streamChat(path, payload, handlers, { auth = false } = {}) {
+export async function streamChat(path, payload, handlers, { auth = false, onUnauthorized } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (auth) headers.Authorization = `Bearer ${store.token}`;
+  if (store.client) headers['X-Client-Key'] = store.client;
 
   let res;
   try {
     res = await fetch(path, { method: 'POST', headers, body: JSON.stringify(payload) });
   } catch {
     handlers.error?.({ message: 'ارتباط با سرور برقرار نشد. مطمئن شوید سرور روشن است.' });
+    return;
+  }
+  if (res.status === 401 && onUnauthorized) {
+    onUnauthorized();
     return;
   }
   if (!res.ok || !res.body) {

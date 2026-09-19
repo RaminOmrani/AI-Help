@@ -61,6 +61,28 @@
     flex: 1; min-width: 0; padding: 13px 16px; border-radius: 16px; border-start-end-radius: 6px;
     background: var(--panel-solid); border: 1px solid var(--border); font-size: 14px;
   }
+  /* حباب پیام کاربر چپ‌چین است، پس دکمه‌ها هم باید زیر همان لبه بنشینند */
+  .uacts { display: flex; justify-content: flex-end; gap: 3px; margin-top: 5px;
+           opacity: 0; transition: opacity .15s; }
+  .msg.user:hover .uacts, .uacts:focus-within { opacity: 1; }
+  @media (hover: none) { .uacts { opacity: 1; } }
+  .uacts button {
+    font-size: 11.5px; color: var(--muted); padding: 3px 8px; border-radius: 8px;
+    transition: background .15s, color .15s;
+  }
+  .uacts button:hover { background: color-mix(in srgb, var(--brand) 12%, transparent); color: var(--brand); }
+  .editbox {
+    width: min(70vw, 520px); background: transparent; border: none; resize: none;
+    color: var(--on-brand); font: inherit; line-height: 1.8; outline: none;
+    max-height: 40vh; overflow-y: auto; display: block;
+  }
+  .editbtns { display: flex; gap: 7px; margin-top: 9px; }
+  .editbtns button {
+    font-size: 12px; padding: 4px 12px; border-radius: 9px;
+    background: color-mix(in srgb, #fff 22%, transparent); color: var(--on-brand);
+  }
+  .editbtns button:hover { background: color-mix(in srgb, #fff 34%, transparent); }
+
   .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 11px; padding-top: 10px; border-top: 1px dashed var(--border); }
   .actions button {
     font-size: 12px; padding: 5px 11px; border-radius: 9px; color: var(--muted);
@@ -122,7 +144,7 @@
 
 <div class="login" id="login" hidden>
   <div class="card">
-    <div class="orb" data-face="🛠️"></div>
+    <div class="orb" data-logo></div>
     <h2>کنسول پشتیبانی</h2>
     <p class="muted">برای ورود رمز عبور کارشناس را وارد کنید.</p>
     <input class="field" id="pw" type="password" placeholder="رمز عبور" style="text-align:center">
@@ -134,7 +156,7 @@
 <div class="app" id="app" hidden>
   <header class="topbar">
     <div class="brand">
-      <div class="orb" data-face="🛠️"></div>
+      <div class="orb" data-logo></div>
       <div>
         <b>کنسول پشتیبانی</b>
         <div class="muted tiny" id="stats">—</div>
@@ -153,7 +175,7 @@
       <div class="scroll" id="scroll">
         <div class="inner" id="stream">
           <div class="empty" id="empty">
-            <div class="orb" data-face="🛠️"></div>
+            <div class="orb" data-logo></div>
             <h2>سوال فنی‌ات را بپرس</h2>
             <p id="welcome">پاسخ را با ارجاع دقیق به فایل و شماره‌ی صفحه می‌دهم.</p>
             <div class="qgrid" id="qgrid"></div>
@@ -190,10 +212,11 @@
 
 <script type="module">
 import { $, $$, md, api, toast, store, streamChat, initTheme, copyText, escapeHtml, faDigits,
-         setAuthScope, openHistoryDrawer, mountLengthPicker } from '/assets/core.js';
+         setAuthScope, openHistoryDrawer, mountLengthPicker, ensureClientKey } from '/assets/core.js';
 
 setAuthScope('agent');
 initTheme('#themeBtn');
+await ensureClientKey();
 
 const login = $('#login'), app = $('#app');
 let busy = false;
@@ -245,7 +268,7 @@ async function restoreConversation() {
   $('#empty')?.remove();
   let lastSources = [];
   for (const m of messages) {
-    if (m.role === 'user') { addUser(m.content); continue; }
+    if (m.role === 'user') { addUser(m.content, m.id); continue; }
     const el = addBot();
     el.querySelector('.md').innerHTML = md(m.content);
     const actions = el.querySelector('.actions');
@@ -273,8 +296,7 @@ $('#newBtn').addEventListener('click', startFresh);
 $('#histBtn').addEventListener('click', () =>
   openHistoryDrawer({
     load: async () =>
-      (await api(`/api/agent/conversations?client_id=${encodeURIComponent(store.client)}`,
-                 { auth: true })).conversations,
+      (await api('/api/agent/conversations', { auth: true })).conversations,
     open: async (sessionId) => {
       store.useSession(sessionId);
       stream.replaceChildren();
@@ -282,7 +304,7 @@ $('#histBtn').addEventListener('click', () =>
       if (!stream.children.length) startFresh();
     },
     remove: (sessionId) =>
-      api(`/api/agent/conversations/${encodeURIComponent(sessionId)}?client_id=${encodeURIComponent(store.client)}`,
+      api(`/api/agent/conversations/${encodeURIComponent(sessionId)}`,
           { method: 'DELETE', auth: true }),
     fresh: startFresh,
   })
@@ -302,20 +324,92 @@ const stream = $('#stream'), scrollEl = $('#scroll'), input = $('#q'), sendBtn =
 const emptyTemplate = $('#empty').cloneNode(true);
 const scroll = () => { scrollEl.scrollTop = scrollEl.scrollHeight; };
 
-function addUser(text) {
+function addUser(text, messageId) {
   $('#empty')?.remove();
   const el = document.createElement('div');
   el.className = 'msg user';
-  el.innerHTML = `<div class="row">${escapeHtml(text)}</div>`;
+  el.innerHTML =
+    `<div class="row">${escapeHtml(text)}</div>` +
+    '<div class="uacts">' +
+      '<button data-act="copy">📋 کپی</button>' +
+      '<button data-act="edit">✏️ ویرایش</button>' +
+      '<button data-act="again">🔄 دوباره</button>' +
+    '</div>';
+  el.dataset.text = text;
+  if (messageId) el.dataset.mid = messageId;
+  const acts = el.querySelector('.uacts');
+  acts.querySelector('[data-act="copy"]').onclick  = () => copyText(el.dataset.text);
+  acts.querySelector('[data-act="again"]').onclick = () => resend(el, el.dataset.text);
+  acts.querySelector('[data-act="edit"]').onclick  = () => startEdit(el);
   stream.appendChild(el);
   scroll();
+  return el;
+}
+
+/** این پیام و هر چه بعدش آمده را از سرور و صفحه پاک می‌کند. */
+async function rewindFrom(el) {
+  const messageId = Number(el.dataset.mid || 0);
+  if (!messageId) {
+    toast('این پیام هنوز ذخیره نشده؛ یک لحظه بعد دوباره امتحان کنید.', 'err');
+    return false;
+  }
+  try {
+    await api('/api/agent/chat/rewind', {
+      method: 'POST', auth: true,
+      body: { session_id: store.session, message_id: messageId },
+    });
+  } catch (err) {
+    toast(err.message, 'err');
+    return false;
+  }
+  while (el.nextSibling) el.nextSibling.remove();
+  el.remove();
+  return true;
+}
+
+async function resend(el, text) {
+  if (busy) return;
+  if (await rewindFrom(el)) ask(text);
+}
+
+function startEdit(el) {
+  if (busy || el.querySelector('textarea')) return;
+  const row = el.querySelector('.row');
+  const original = el.dataset.text;
+
+  row.innerHTML =
+    '<textarea class="editbox" rows="1"></textarea>' +
+    '<div class="editbtns"><button data-e="save">ارسال</button>' +
+    '<button data-e="cancel">انصراف</button></div>';
+
+  const box = row.querySelector('textarea');
+  const grow = () => { box.style.height = 'auto'; box.style.height = `${box.scrollHeight}px`; };
+  const cancel = () => { row.textContent = original; };
+  const save = async () => {
+    const next = box.value.trim();
+    if (!next) return;
+    if (next === original) { cancel(); return; }
+    if (await rewindFrom(el)) ask(next);
+  };
+
+  box.value = original;
+  box.addEventListener('input', grow);
+  box.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); save(); }
+    if (e.key === 'Escape') cancel();
+  });
+  row.querySelector('[data-e="save"]').onclick = save;
+  row.querySelector('[data-e="cancel"]').onclick = cancel;
+  grow();
+  box.focus();
+  box.setSelectionRange(original.length, original.length);
 }
 
 function addBot() {
   const el = document.createElement('div');
   el.className = 'msg bot';
   el.innerHTML =
-    '<div class="row"><div class="orb" data-face="🛠️"></div>' +
+    '<div class="row"><div class="orb" data-logo></div>' +
     '<div class="content"><div class="md"><div class="thinking"><span class="dots"><i></i><i></i><i></i></span> در حال جستجو در مستندات…</div></div>' +
     '<div class="actions" hidden></div></div></div>';
   stream.appendChild(el);
@@ -331,7 +425,7 @@ async function ask(text) {
   input.style.height = 'auto';
   sendBtn.disabled = true;
 
-  addUser(question);
+  const userEl = addUser(question);
   const botEl = addBot();
   const orb = botEl.querySelector('.orb');
   const body = botEl.querySelector('.md');
@@ -343,9 +437,9 @@ async function ask(text) {
   await streamChat('/api/agent/chat', {
     message: question,
     session_id: store.session,
-    client_id: store.client,
     length: store.length,
   }, {
+    user: (e) => { userEl.dataset.mid = e.message_id; },
     sources: (e) => { sources = e.sources || []; renderSources(sources, e.grounded, e); },
     delta: (e) => {
       if (first) { body.innerHTML = ''; first = false; }
@@ -393,17 +487,41 @@ function showRewrite(text) {
   back.innerHTML = `
     <div class="modal">
       <h3 style="margin:0 0 4px">متن آماده‌ی ارسال به مشتری</h3>
-      <p class="muted tiny" style="margin:0 0 16px">اصطلاحات فنی و ارجاع‌های داخلی حذف شده‌اند.</p>
-      <div class="md" style="background:var(--bg);padding:15px;border-radius:14px;font-size:13.5px">${md(text)}</div>
-      <div style="display:flex;gap:9px;margin-top:18px">
+      <p class="muted tiny" style="margin:0 0 14px">
+        اصطلاحات فنی و ارجاع‌های داخلی حذف شده‌اند. قبل از فرستادن می‌توانید همین‌جا ویرایشش کنید.
+      </p>
+      <textarea id="rText" class="field" dir="auto"
+                style="width:100%;min-height:210px;max-height:46vh;resize:vertical;
+                       line-height:1.9;font-size:13.5px"></textarea>
+      <div style="display:flex;gap:9px;margin-top:16px;align-items:center;flex-wrap:wrap">
         <button class="btn btn-primary" id="rCopy">کپی متن</button>
+        <button class="btn" id="rPreview">پیش‌نمایش</button>
+        <button class="btn btn-ghost" id="rReset">برگرداندن به متن اولیه</button>
+        <span style="flex:1"></span>
         <button class="btn btn-ghost" id="rClose">بستن</button>
       </div>
+      <div id="rPrev" class="md" hidden
+           style="background:var(--bg);padding:15px;border-radius:14px;font-size:13.5px;margin-top:14px"></div>
     </div>`;
   document.body.appendChild(back);
-  back.addEventListener('click', (e) => { if (e.target === back) back.remove(); });
-  back.querySelector('#rClose').onclick = () => back.remove();
-  back.querySelector('#rCopy').onclick = () => copyText(text);
+
+  const box = back.querySelector('#rText');
+  const preview = back.querySelector('#rPrev');
+  box.value = text;
+
+  const close = () => back.remove();
+  back.addEventListener('click', (e) => { if (e.target === back) close(); });
+  back.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  back.querySelector('#rClose').onclick = close;
+  // کپی همیشه متنِ ویرایش‌شده را برمی‌دارد، نه متن اولیه را
+  back.querySelector('#rCopy').onclick = () => copyText(box.value);
+  back.querySelector('#rReset').onclick = () => { box.value = text; preview.hidden = true; };
+  back.querySelector('#rPreview').onclick = () => {
+    preview.hidden = !preview.hidden;
+    if (!preview.hidden) preview.innerHTML = md(box.value);
+  };
+  box.focus();
+  box.setSelectionRange(box.value.length, box.value.length);
 }
 
 /* ---------- منابع ---------- */

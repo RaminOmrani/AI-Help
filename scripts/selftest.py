@@ -127,12 +127,14 @@ async def main():
     # ---- استریم پاسخ ----
     events = []
     async for raw in chat_service.answer_stream(
-        "چطور فاکتور برگشت از فروش ثبت کنم؟", session_id="s1", audience="public"
+        "چطور فاکتور برگشت از فروش ثبت کنم؟",
+        session_id="s1", audience="public", client_id="client-a",
     ):
         events.append(json.loads(raw[5:].strip()))
     kinds = [e["type"] for e in events]
     print("رویدادها:", kinds)
-    assert kinds[0] == "sources" and kinds[-1] == "done", "ترتیب رویدادها درست نیست"
+    assert kinds[0] == "user", "شناسه‌ی پیام کاربر اول از همه نیامد"
+    assert kinds[1] == "sources" and kinds[-1] == "done", "ترتیب رویدادها درست نیست"
     answer = "".join(e["text"] for e in events if e["type"] == "delta")
     assert answer, "متن پاسخ خالی است"
     print(f"✅ استریم کار می‌کند → {answer[:45]}…")
@@ -144,13 +146,49 @@ async def main():
     print(f"✅ گفتگو در دیتابیس ذخیره شد ({len(msgs)} پیام، منابع ثبت شد)")
 
     # ---- حافظه‌ی گفتگو ----
-    async for _ in chat_service.answer_stream("و بعدش؟", session_id="s1", audience="public"):
+    async for _ in chat_service.answer_stream(
+        "و بعدش؟", session_id="s1", audience="public", client_id="client-a"
+    ):
         pass
     total = db.query_one("SELECT COUNT(*) c FROM messages")["c"]
     assert total == 4, f"انتظار ۴ پیام، دریافت {total}"
     convs = db.query_one("SELECT COUNT(*) c FROM conversations")["c"]
     assert convs == 1, "برای یک نشست بیش از یک گفتگو ساخته شد"
     print("✅ حافظه‌ی گفتگو روی یک نشست حفظ شد")
+
+    # ---- جداسازی گفتگوها ----
+    # مرورگر دیگری که همان session_id را بداند نباید چیزی ببیند.
+    mine = chat_service.conversation_messages("s1", "public", "client-a")
+    theirs = chat_service.conversation_messages("s1", "public", "client-b")
+    assert len(mine) == 4, f"صاحب گفتگو باید ۴ پیام ببیند، دید {len(mine)}"
+    assert theirs == [], "گفتگوی یک نفر به مرورگر دیگری نشان داده شد"
+    assert chat_service.conversation_messages("s1", "public", "") == [], \
+        "بدون شناسه‌ی معتبر هم گفتگو برگشت"
+    # و نباید بتواند گفتگوی او را عقب ببرد یا پاک کند
+    first_id = db.query_one("SELECT MIN(id) i FROM messages")["i"]
+    assert not chat_service.rewind_to("s1", "public", "client-b", first_id), \
+        "مرورگر غریبه توانست گفتگوی دیگری را عقب ببرد"
+    assert not chat_service.message_belongs_to(first_id, "client-b"), \
+        "بازخورد روی پیام دیگری مجاز شد"
+    assert chat_service.message_belongs_to(first_id, "client-a")
+    print("✅ هر مرورگر فقط گفتگوی خودش را می‌بیند")
+
+    # ---- منابع فقط برای پشتیبان ----
+    assert all(not m["sources"] for m in mine), "منبع به مشتری نشان داده شد"
+    stored = db.query_one(
+        "SELECT sources FROM messages WHERE role='assistant' ORDER BY id LIMIT 1"
+    )["sources"]
+    assert json.loads(stored), "منابع باید در دیتابیس بمانند تا پشتیبان ببیند"
+    print("✅ منابع از مشتری پنهان است ولی در دیتابیس ثبت می‌شود")
+
+    # ---- ویرایش و ارسال دوباره ----
+    last_user = db.query_one(
+        "SELECT id FROM messages WHERE role='user' ORDER BY id DESC LIMIT 1"
+    )["id"]
+    assert chat_service.rewind_to("s1", "public", "client-a", last_user)
+    left = chat_service.conversation_messages("s1", "public", "client-a")
+    assert len(left) == 2, f"بعد از عقب بردن باید ۲ پیام بماند، ماند {len(left)}"
+    print("✅ عقب بردن گفتگو، سوال و پاسخ بعدش را پاک می‌کند")
 
     # ---- بازسازی متن ----
     broken = "چجور ی کاالها ی داخل سرور رو ببر می داخل س ی ستم نت ی کال صندوق سواالت " * 4

@@ -14,7 +14,7 @@ import webbrowser
 
 import uvicorn
 
-from app import config, db, settings
+from app import config, db, security, settings
 
 if __name__ == "__main__":
     db.init_db()
@@ -28,6 +28,7 @@ if __name__ == "__main__":
     print(f"  مدل          : {settings.chat_model()}")
     if not settings.api_key():
         print("  ⚠️  کلید AvalAI ثبت نشده — در پنل مدیریت، تب «کلید و مدل‌ها» واردش کنید.")
+    security.print_startup_warnings()
     print("═" * 58 + "\n")
 
     if config.OPEN_BROWSER:

@@ -38,7 +38,7 @@ AVALAI_BASE_URL = _env("AVALAI_BASE_URL", "https://api.avalai.ir/v1").rstrip("/"
 # اندپوینت اعتبار خارج از /v1 است
 AVALAI_CREDIT_URL = _env("AVALAI_CREDIT_URL", "https://api.avalai.ir/user/v1/credit")
 
-CHAT_MODEL = _env("CHAT_MODEL", "gemini-3.7-flash")
+CHAT_MODEL = _env("CHAT_MODEL", "gemini-3.8-flash")
 FAST_MODEL = _env("FAST_MODEL", CHAT_MODEL)
 VISION_MODEL = _env("VISION_MODEL", CHAT_MODEL)
 EMBEDDING_MODEL = _env("EMBEDDING_MODEL", "text-embedding-3-large")
@@ -95,9 +95,32 @@ SESSION_HOURS = _env_int("SESSION_HOURS", 24)
 # ------------------------------------------------------------------
 BRAND_NAME = _env("BRAND_NAME", "میلیونر")
 BRAND_PRODUCT = _env("BRAND_PRODUCT", "نرم‌افزار حسابداری و فروشگاهی میلیونر")
-ASSISTANT_NAME = _env("ASSISTANT_NAME", "میلی")
+ASSISTANT_NAME = _env("ASSISTANT_NAME", "میلیونر بات")
 SUPPORT_PHONE = _env("SUPPORT_PHONE", "")
 SUPPORT_HOURS = _env("SUPPORT_HOURS", "شنبه تا چهارشنبه، ۹ تا ۱۷")
+
+# ------------------------------------------------------------------
+# انتشار روی اینترنت
+# ------------------------------------------------------------------
+# دامنه‌هایی که اجازه دارند از مرورگر به این API وصل شوند.
+# خالی یعنی «همه» — فقط برای اجرای محلی مناسب است.
+ALLOWED_ORIGINS = [o.strip() for o in _env("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+
+# اگر پشت nginx / کلادفلر هستید true بگذارید تا آی‌پی واقعی کاربر از هدر خوانده شود.
+# اگر مستقیم در معرض اینترنت هستید حتماً false بماند، وگرنه هدر جعل می‌شود.
+TRUST_PROXY = _env("TRUST_PROXY", "false").lower() in {"1", "true", "yes", "on"}
+
+# محافظ اعتبار: سقف سوال برای هر آی‌پی
+RATE_LIMIT_ENABLED = _env("RATE_LIMIT_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+RATE_LIMIT_PER_MINUTE = _env_int("RATE_LIMIT_PER_MINUTE", 10)
+RATE_LIMIT_PER_DAY = _env_int("RATE_LIMIT_PER_DAY", 150)
+
+# دسترسی به صفحه‌ی مشتری: open (همه) یا code (فقط با کد دسترسی).
+# از پنل مدیریت هم قابل تغییر است و همان‌جا اولویت دارد.
+PUBLIC_ACCESS_MODE = _env("PUBLIC_ACCESS_MODE", "open")
+PUBLIC_ACCESS_CODES = _env("PUBLIC_ACCESS_CODES", "")
+# مهمان بعد از وارد کردن کد، این‌قدر روز در دسترس می‌ماند
+VISITOR_SESSION_DAYS = _env_int("VISITOR_SESSION_DAYS", 30)
 
 HOST = _env("HOST", "0.0.0.0")
 PORT = _env_int("PORT", 8000)

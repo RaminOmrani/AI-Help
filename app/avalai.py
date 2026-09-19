@@ -202,19 +202,34 @@ async def embed(
 # ------------------------------------------------------------------
 # اعتبار و مدل‌ها
 # ------------------------------------------------------------------
+async def _get_json(url: str) -> Any:
+    """یک GET ساده که هر خطای شبکه‌ای را هم به AvalAIError تبدیل می‌کند.
+
+    بدون این، قطعیِ اینترنت یا فیلترینگ به‌جای پیام خوانا، خطای ۵۰۰ و
+    یک Traceback در لاگ می‌داد و پنل مدیریت هیچ توضیحی نشان نمی‌داد.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(url, headers=_headers())
+    except httpx.HTTPError as exc:
+        raise AvalAIError(describe(exc)) from exc
+    if resp.status_code >= 400:
+        raise AvalAIError(_friendly(resp.status_code, resp.text))
+    try:
+        return resp.json()
+    except ValueError as exc:
+        raise AvalAIError("پاسخ سرویس قابل خواندن نبود (JSON نبود).") from exc
+
+
 async def credit() -> dict[str, Any]:
     """مانده‌ی اعتبار حساب AvalAI."""
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.get(config.AVALAI_CREDIT_URL, headers=_headers())
-        if resp.status_code >= 400:
-            raise AvalAIError(_friendly(resp.status_code, resp.text))
-        return resp.json()
+    data = await _get_json(config.AVALAI_CREDIT_URL)
+    if not isinstance(data, dict):
+        raise AvalAIError("ساختار پاسخ اعتبار غیرمنتظره بود.")
+    return data
 
 
 async def list_models() -> list[str]:
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.get(f"{config.AVALAI_BASE_URL}/models", headers=_headers())
-        if resp.status_code >= 400:
-            raise AvalAIError(_friendly(resp.status_code, resp.text))
-        data = resp.json()
-    return sorted({m.get("id", "") for m in data.get("data", []) if m.get("id")})
+    data = await _get_json(f"{config.AVALAI_BASE_URL}/models")
+    items = data.get("data", []) if isinstance(data, dict) else []
+    return sorted({m.get("id", "") for m in items if isinstance(m, dict) and m.get("id")})

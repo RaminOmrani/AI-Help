@@ -47,16 +47,34 @@ async def check_credit() -> dict:
     return _check("اعتبار حساب", True, detail)
 
 
+_DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+
+def _digits_only(text: str) -> str:
+    """رقم‌های متن را به شکل استاندارد و بدون جداکننده برمی‌گرداند.
+
+    مدل ممکن است «۱۲۳۴» یا «1,234» یا «1 2 3 4» بنویسد؛ همه باید قبول شوند.
+    """
+    return "".join(ch for ch in text.translate(_DIGITS) if ch.isdigit())
+
+
 async def check_chat() -> dict:
     model = settings.chat_model()
     try:
+        # سقف دست‌ودل‌بازانه: مدل‌های استدلالیِ امروزی بخشی از بودجه‌ی
+        # توکن را صرف فکر کردن می‌کنند و با سقف کوچک، پاسخ نیمه برمی‌گردد.
         answer = await avalai.chat(
-            [{"role": "user", "content": "فقط بنویس: سلام"}], model=model, max_tokens=20
+            [{"role": "user", "content": "فقط بنویس: سلام"}], model=model, max_tokens=200
         )
     except Exception as exc:  # noqa: BLE001
         return _check(
             f"مدل پاسخ‌دهی ({model})", False, str(exc)[:200],
             "نام مدل را بررسی کنید؛ ممکن است روی حساب شما فعال نباشد.",
+        )
+    if not answer:
+        return _check(
+            f"مدل پاسخ‌دهی ({model})", False, "پاسخ خالی برگشت.",
+            "این مدل روی حساب شما جواب متنی نمی‌دهد؛ مدل دیگری انتخاب کنید.",
         )
     return _check(f"مدل پاسخ‌دهی ({model})", True, answer[:60])
 
@@ -65,6 +83,7 @@ async def check_vision() -> dict:
     model = settings.vision_model()
     if not settings.vision_enabled():
         return _check(f"مدل بینایی ({model})", True, "خاموش است — اسکرین‌شات‌ها خوانده نمی‌شوند.")
+    meta: dict = {}
     try:
         answer = await avalai.chat(
             [{
@@ -75,16 +94,30 @@ async def check_vision() -> dict:
                 ],
             }],
             model=model,
-            max_tokens=30,
+            max_tokens=800,
+            meta=meta,
         )
     except Exception as exc:  # noqa: BLE001
         return _check(
             f"مدل بینایی ({model})", False, str(exc)[:200],
-            "مدلی انتخاب کنید که تصویر می‌فهمد (Gemini، GPT-5.x، Claude).",
+            "مدلی انتخاب کنید که تصویر می‌فهمد (Gemini، GPT، Claude).",
         )
 
-    if "1234" in answer.replace("۱۲۳۴", "1234"):
+    if "1234" in _digits_only(answer):
         return _check(f"مدل بینایی ({model})", True, "تصویر آزمایشی درست خوانده شد.")
+
+    # قبل از متهم کردنِ مدل، دو حالتی که تقصیر مدل نیست را جدا کنیم.
+    if meta.get("finish_reason") == "length":
+        return _check(
+            f"مدل بینایی ({model})", False,
+            f"پاسخ به سقف توکن خورد و نیمه ماند: {answer[:40]}",
+            "این مدل قبل از جواب، طولانی فکر می‌کند. مشکل از دیدنِ تصویر نیست.",
+        )
+    if not answer:
+        return _check(
+            f"مدل بینایی ({model})", False, "پاسخ خالی برگشت.",
+            "این مدل تصویر را نمی‌پذیرد یا خروجی متنی نمی‌دهد؛ مدل دیگری انتخاب کنید.",
+        )
     return _check(
         f"مدل بینایی ({model})", False, f"پاسخ نادرست: {answer[:60]}",
         "این مدل تصویر را درست نمی‌خواند؛ اسکرین‌شات‌های PDF از دست می‌روند.",

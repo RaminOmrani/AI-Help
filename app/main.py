@@ -9,18 +9,22 @@ import shutil
 import unicodedata
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import avalai, chat_service, config, db, diagnostics, ingest, prompts, rag, security, settings
+from . import (
+    avalai, chat_service, config, db, diagnostics, ingest, prompts,
+    rag, ratelimit, security, settings,
+)
 
 app = FastAPI(title="Support AI — AvalAI", version="3.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.ALLOWED_ORIGINS or ["*"],
+    allow_credentials=bool(config.ALLOWED_ORIGINS),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -49,6 +53,12 @@ class FeedbackIn(BaseModel):
     value: int  # 1 یا -1
 
 
+class RewindIn(BaseModel):
+    """برای «ویرایش و ارسال دوباره»: این پیام و بعدی‌ها پاک شوند."""
+    session_id: str = Field(max_length=64)
+    message_id: int
+
+
 class TicketIn(BaseModel):
     name: str = ""
     contact: str = ""
@@ -60,6 +70,10 @@ class TicketIn(BaseModel):
 class LoginIn(BaseModel):
     role: str
     password: str
+
+
+class UnlockIn(BaseModel):
+    code: str = Field(min_length=1, max_length=120)
 
 
 class RewriteIn(BaseModel):
@@ -84,6 +98,8 @@ class AISettingsIn(BaseModel):
     vision_model: str | None = None
     embedding_model: str | None = None
     vision_enabled: bool | None = None
+    public_access_mode: str | None = None
+    public_access_codes: str | None = None
 
 
 # ==================================================================
@@ -99,6 +115,7 @@ async def bootstrap():
         assistant=config.ASSISTANT_NAME, product=config.BRAND_PRODUCT
     )
     return {
+        "access_mode": settings.access_mode(),
         "brand": config.BRAND_NAME,
         "product": config.BRAND_PRODUCT,
         "assistant": config.ASSISTANT_NAME,
@@ -110,14 +127,43 @@ async def bootstrap():
     }
 
 
+@app.post("/api/client-key")
+async def client_key(request: Request):
+    """کلید امضاشده‌ی این مرورگر — گفتگوها به همین بسته می‌شوند.
+
+    مرورگر یک بار می‌گیرد و در localStorage نگه می‌دارد. چون امضا دست
+    سرور است، کسی نمی‌تواند کلید دیگری بسازد و سراغ گفتگوهای او برود.
+    """
+    ratelimit.check(request)
+    return {"key": security.create_client_key()}
+
+
+@app.post("/api/public/unlock")
+async def unlock(payload: UnlockIn, request: Request):
+    """تبدیل کد دسترسی به توکن مهمان."""
+    ratelimit.check(request, cost=2)   # جلوگیری از حدس زدن کد
+    if not settings.code_is_valid(payload.code):
+        raise HTTPException(status_code=401, detail="کد دسترسی درست نیست.")
+    return {
+        "token": security.create_token("visitor", hours=config.VISITOR_SESSION_DAYS * 24),
+        "role": "visitor",
+    }
+
+
 @app.post("/api/chat")
-async def customer_chat(payload: ChatIn):
+async def customer_chat(
+    payload: ChatIn,
+    request: Request,
+    _: str = Depends(security.require_visitor),
+    client_id: str = Depends(security.require_client),
+):
+    ratelimit.check(request)
     return StreamingResponse(
         chat_service.answer_stream(
             payload.message.strip(),
             session_id=payload.session_id,
             audience="public",
-            client_id=payload.client_id,
+            client_id=client_id,
             length=payload.length,
         ),
         media_type="text/event-stream",
@@ -138,41 +184,75 @@ def _delete_conversation(session_id: str, client_id: str, audience: str) -> bool
 
 
 @app.get("/api/history")
-async def customer_history(session_id: str):
+async def customer_history(
+    session_id: str,
+    _: str = Depends(security.require_visitor),
+    client_id: str = Depends(security.require_client),
+):
     """پیام‌های گفتگوی جاری — تا با رفرش صفحه از دست نروند."""
-    return {"messages": chat_service.conversation_messages(session_id, "public")}
+    return {"messages": chat_service.conversation_messages(session_id, "public", client_id)}
 
 
 @app.get("/api/conversations")
-async def customer_conversations(client_id: str):
+async def customer_conversations(
+    _: str = Depends(security.require_visitor),
+    client_id: str = Depends(security.require_client),
+):
     """فهرست گفتگوهای قبلیِ همین مرورگر."""
     return {"conversations": chat_service.recent_conversations(client_id, "public")}
 
 
 @app.delete("/api/conversations/{session_id}")
-async def delete_customer_conversation(session_id: str, client_id: str):
+async def delete_customer_conversation(
+    session_id: str,
+    _: str = Depends(security.require_visitor),
+    client_id: str = Depends(security.require_client),
+):
     if not _delete_conversation(session_id, client_id, "public"):
         raise HTTPException(status_code=404, detail="گفتگو پیدا نشد.")
     return {"ok": True}
 
 
+@app.post("/api/chat/rewind")
+async def customer_rewind(
+    payload: RewindIn,
+    _: str = Depends(security.require_visitor),
+    client_id: str = Depends(security.require_client),
+):
+    """پیش از ارسال دوباره‌ی یک سوال، نسخه‌ی قبلی و پاسخش را پاک می‌کند."""
+    if not chat_service.rewind_to(payload.session_id, "public", client_id, payload.message_id):
+        raise HTTPException(status_code=404, detail="پیام پیدا نشد.")
+    return {"ok": True}
+
+
 @app.post("/api/feedback")
-async def feedback(payload: FeedbackIn):
+async def feedback(
+    payload: FeedbackIn,
+    _: str = Depends(security.require_visitor),
+    client_id: str = Depends(security.require_client),
+):
+    # بازخورد فقط روی پیام‌های گفتگوی خودِ همین مرورگر
+    if not chat_service.message_belongs_to(payload.message_id, client_id):
+        raise HTTPException(status_code=404, detail="پیام پیدا نشد.")
     value = 1 if payload.value > 0 else -1
     db.execute("UPDATE messages SET feedback = ? WHERE id = ?", (value, payload.message_id))
     return {"ok": True}
 
 
 @app.post("/api/ticket")
-async def create_ticket(payload: TicketIn):
-    conv = db.query_one(
-        "SELECT id FROM conversations WHERE session_id = ? ORDER BY id DESC LIMIT 1",
-        (payload.session_id,),
-    )
+async def create_ticket(
+    payload: TicketIn,
+    request: Request,
+    _: str = Depends(security.require_visitor),
+    client_id: str = Depends(security.require_client),
+):
+    ratelimit.check(request)
+    # تیکت فقط به گفتگوی خودِ همین مرورگر وصل می‌شود
+    conv_id = chat_service.find_conversation(payload.session_id, "public", client_id)
     ticket_id = db.execute(
         "INSERT INTO tickets(conv_id, name, contact, subject, body) VALUES (?, ?, ?, ?, ?)",
         (
-            conv["id"] if conv else None,
+            conv_id,
             payload.name.strip()[:80],
             payload.contact.strip()[:120],
             (payload.subject or "درخواست تماس با پشتیبانی").strip()[:200],
@@ -212,14 +292,18 @@ async def agent_bootstrap(role: str = Depends(security.require_staff)):
 
 
 @app.post("/api/agent/chat")
-async def agent_chat(payload: ChatIn, role: str = Depends(security.require_staff)):
+async def agent_chat(
+    payload: ChatIn,
+    role: str = Depends(security.require_staff),
+    client_id: str = Depends(security.require_client),
+):
     return StreamingResponse(
         chat_service.answer_stream(
             payload.message.strip(),
             session_id=payload.session_id,
             audience="internal",
             model=payload.model,
-            client_id=payload.client_id,
+            client_id=client_id,
             length=payload.length,
         ),
         media_type="text/event-stream",
@@ -228,21 +312,42 @@ async def agent_chat(payload: ChatIn, role: str = Depends(security.require_staff
 
 
 @app.get("/api/agent/history")
-async def agent_history(session_id: str, role: str = Depends(security.require_staff)):
-    return {"messages": chat_service.conversation_messages(session_id, "internal")}
+async def agent_history(
+    session_id: str,
+    role: str = Depends(security.require_staff),
+    client_id: str = Depends(security.require_client),
+):
+    return {"messages": chat_service.conversation_messages(session_id, "internal", client_id)}
 
 
 @app.get("/api/agent/conversations")
-async def agent_conversations(client_id: str, role: str = Depends(security.require_staff)):
+async def agent_conversations(
+    role: str = Depends(security.require_staff),
+    client_id: str = Depends(security.require_client),
+):
+    """هر کارشناس فقط گفتگوهای خودش را می‌بیند، نه گفتگوی همکارانش."""
     return {"conversations": chat_service.recent_conversations(client_id, "internal")}
 
 
 @app.delete("/api/agent/conversations/{session_id}")
 async def delete_agent_conversation(
-    session_id: str, client_id: str, role: str = Depends(security.require_staff)
+    session_id: str,
+    role: str = Depends(security.require_staff),
+    client_id: str = Depends(security.require_client),
 ):
     if not _delete_conversation(session_id, client_id, "internal"):
         raise HTTPException(status_code=404, detail="گفتگو پیدا نشد.")
+    return {"ok": True}
+
+
+@app.post("/api/agent/chat/rewind")
+async def agent_rewind(
+    payload: RewindIn,
+    role: str = Depends(security.require_staff),
+    client_id: str = Depends(security.require_client),
+):
+    if not chat_service.rewind_to(payload.session_id, "internal", client_id, payload.message_id):
+        raise HTTPException(status_code=404, detail="پیام پیدا نشد.")
     return {"ok": True}
 
 
@@ -480,6 +585,8 @@ async def admin_stats(role: str = Depends(security.require_admin)):
     return {
         "index": rag.stats(),
         "usage": dict(counts),
+        "rate_limit": ratelimit.snapshot(),
+        "security_issues": security.security_issues(),
         "model": settings.chat_model(),
         "embedding_model": settings.embedding_model(),
         "vision_model": settings.vision_model(),
@@ -573,7 +680,8 @@ async def get_ai_settings(role: str = Depends(security.require_admin)):
 @app.put("/api/admin/ai-settings")
 async def put_ai_settings(payload: AISettingsIn, role: str = Depends(security.require_admin)):
     values: dict[str, str] = {}
-    for field_name in ("chat_model", "fast_model", "vision_model", "embedding_model"):
+    for field_name in ("chat_model", "fast_model", "vision_model", "embedding_model",
+                       "public_access_mode", "public_access_codes"):
         value = getattr(payload, field_name)
         if value is not None:
             values[field_name] = value

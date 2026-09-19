@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import secrets
 import time
 
 from fastapi import Header, HTTPException
@@ -16,6 +17,16 @@ ROLE_PASSWORDS = {
     "admin": lambda: config.ADMIN_PASSWORD,
     "agent": lambda: config.AGENT_PASSWORD,
 }
+
+
+def constant_time_equals(given: str | None, expected: str | None) -> bool:
+    """مقایسه‌ی رمز در زمان ثابت، بدون فرض ASCII بودن.
+
+    hmac.compare_digest روی رشته فقط با نویسه‌های ASCII کار می‌کند و اگر کاربر
+    حتی یک حرف فارسی تایپ کند TypeError می‌دهد. با تبدیل به بایت هم رمز فارسی
+    پشتیبانی می‌شود و هم مقایسه در زمان ثابت باقی می‌ماند.
+    """
+    return hmac.compare_digest((given or "").encode("utf-8"), (expected or "").encode("utf-8"))
 
 
 def _sign(payload: bytes) -> str:
@@ -31,10 +42,9 @@ def _unb64(text: str) -> bytes:
     return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
-def create_token(role: str) -> str:
-    payload = json.dumps(
-        {"role": role, "exp": int(time.time()) + config.SESSION_HOURS * 3600}
-    ).encode()
+def create_token(role: str, *, hours: int | None = None) -> str:
+    lifetime = (hours or config.SESSION_HOURS) * 3600
+    payload = json.dumps({"role": role, "exp": int(time.time()) + lifetime}).encode()
     body = _b64(payload)
     return f"{body}.{_sign(payload)}"
 
@@ -57,12 +67,46 @@ def verify_token(token: str) -> str | None:
     return data.get("role")
 
 
+# ------------------------------------------------------------------
+# شناسه‌ی مالکیتِ گفتگو
+# ------------------------------------------------------------------
+# گفتگوها نام کاربری ندارند؛ به یک شناسه‌ی مرورگر بسته‌اند. اگر آن شناسه را
+# خودِ مرورگر بسازد و در پارامتر بفرستد، هر کسی می‌تواند شناسه‌ی دیگری را
+# بگذارد و گفتگوهای او را بخواند یا پاک کند. پس شناسه را سرور می‌سازد و
+# امضا می‌کند؛ بدون SECRET_KEY نمی‌شود شناسه‌ی جعلی ساخت.
+def create_client_key() -> str:
+    """کلید تازه برای یک مرورگر: «شناسه.امضا»"""
+    client_id = secrets.token_urlsafe(18)
+    return f"{client_id}.{_sign(client_id.encode())}"
+
+
+def client_id_from_key(key: str | None) -> str:
+    """اگر امضا درست بود شناسه را برمی‌گرداند، وگرنه رشته‌ی خالی."""
+    if not key or "." not in key:
+        return ""
+    client_id, signature = key.rsplit(".", 1)
+    if not client_id or not hmac.compare_digest(signature, _sign(client_id.encode())):
+        return ""
+    return client_id
+
+
+async def require_client(x_client_key: str | None = Header(default=None)) -> str:
+    """شناسه‌ی تأییدشده‌ی مرورگر — برای هر مسیری که به گفتگوها دست می‌زند."""
+    client_id = client_id_from_key(x_client_key)
+    if not client_id:
+        raise HTTPException(
+            status_code=401,
+            detail="شناسه‌ی این مرورگر معتبر نیست. صفحه را تازه کنید.",
+        )
+    return client_id
+
+
 def login(role: str, password: str) -> str:
     getter = ROLE_PASSWORDS.get(role)
     if not getter:
         raise HTTPException(status_code=400, detail="نقش نامعتبر است.")
     expected = getter()
-    if not expected or not hmac.compare_digest(password or "", expected):
+    if not expected or not constant_time_equals(password, expected):
         raise HTTPException(status_code=401, detail="رمز عبور اشتباه است.")
     return create_token(role)
 
@@ -80,9 +124,114 @@ async def require_admin(authorization: str | None = Header(default=None)) -> str
     return role
 
 
+async def require_visitor(authorization: str | None = Header(default=None)) -> str:
+    """دسترسی به صفحه‌ی مشتری.
+
+    وقتی حالت روی «open» است هیچ چیزی لازم نیست. وقتی روی «code» است،
+    کاربر باید یک بار کد دسترسی را وارد کرده و توکن مهمان گرفته باشد.
+    کارکنان (مدیر و کارشناس) هم طبیعتاً اجازه دارند.
+    """
+    from . import settings
+
+    if settings.access_mode() == "open":
+        return "public"
+
+    token = (authorization or "").removeprefix("Bearer ").strip()
+    role = verify_token(token) if token else None
+    if role in {"visitor", "agent", "admin"}:
+        return role
+    raise HTTPException(
+        status_code=401,
+        detail="برای استفاده از دستیار، کد دسترسی لازم است.",
+    )
+
+
 async def require_staff(authorization: str | None = Header(default=None)) -> str:
     """پشتیبان یا مدیر."""
     role = verify_token(_extract(authorization))
     if role not in {"admin", "agent"}:
         raise HTTPException(status_code=403, detail="دسترسی کارشناس پشتیبانی لازم است.")
     return role
+
+
+# ------------------------------------------------------------------
+# بررسی آمادگی برای انتشار عمومی
+# ------------------------------------------------------------------
+INSECURE_DEFAULTS = {
+    "ADMIN_PASSWORD": "admin",
+    "AGENT_PASSWORD": "support",
+    "SECRET_KEY": "change-me-please",
+}
+
+# مقادیری که در فایل نمونه نوشته شده‌اند و کاربر یادش رفته عوضشان کند.
+# طولشان کافی است ولی تصادفی نیستند، پس نباید «امن» حساب شوند.
+PLACEHOLDERS = {
+    "یک-رشته-تصادفی-طولانی",
+    "یک-رشته-تصادفی-طولانی-اینجا-بگذارید",
+    "رمز-مدیر",
+    "رمز-کارشناس",
+    "changeme",
+    "change-me",
+    "your-secret-key",
+    "aa-xxxxxxxxxxxxxxxxxxxxxxxx",
+}
+
+
+def is_placeholder(value: str) -> bool:
+    """آیا این مقدار هنوز همان چیزی است که در فایل نمونه بود؟"""
+    cleaned = (value or "").strip()
+    if cleaned in PLACEHOLDERS:
+        return True
+    # مقادیر نمونه معمولاً فقط حرف و خط تیره‌اند و هیچ تصادفی‌بودنی ندارند
+    return bool(cleaned) and cleaned.count("-") >= 3 and not any(c.isdigit() for c in cleaned)
+
+
+def security_issues() -> list[dict]:
+    """مشکل‌هایی که قبل از باز کردن سایت روی اینترنت باید حل شوند."""
+    issues: list[dict] = []
+
+    if config.ADMIN_PASSWORD == INSECURE_DEFAULTS["ADMIN_PASSWORD"] or is_placeholder(config.ADMIN_PASSWORD):
+        issues.append({
+            "key": "ADMIN_PASSWORD",
+            "text": "رمز پنل مدیریت هنوز «admin» است — هر کسی می‌تواند وارد شود و کلید API را عوض کند.",
+        })
+    if config.AGENT_PASSWORD == INSECURE_DEFAULTS["AGENT_PASSWORD"] or is_placeholder(config.AGENT_PASSWORD):
+        issues.append({
+            "key": "AGENT_PASSWORD",
+            "text": "رمز کنسول پشتیبان هنوز «support» است — مستندات داخلی در دسترس عموم قرار می‌گیرد.",
+        })
+    if config.SECRET_KEY == INSECURE_DEFAULTS["SECRET_KEY"] or is_placeholder(config.SECRET_KEY):
+        issues.append({
+            "key": "SECRET_KEY",
+            "text": "SECRET_KEY هنوز مقدار نمونه است — توکن ورود قابل جعل می‌شود.",
+        })
+    elif len(config.SECRET_KEY) < 32:
+        issues.append({
+            "key": "SECRET_KEY_SHORT",
+            "text": "SECRET_KEY کوتاه است؛ حداقل ۳۲ نویسه‌ی تصادفی بگذارید.",
+        })
+    if not config.ALLOWED_ORIGINS:
+        issues.append({
+            "key": "ALLOWED_ORIGINS",
+            "text": "ALLOWED_ORIGINS خالی است — هر سایتی می‌تواند از مرورگر به این API وصل شود.",
+        })
+    if not config.RATE_LIMIT_ENABLED:
+        issues.append({
+            "key": "RATE_LIMIT",
+            "text": "محدودیت نرخ خاموش است — اعتبار AvalAI بی‌محافظ می‌ماند.",
+        })
+    return issues
+
+
+def print_startup_warnings() -> None:
+    """هشدارهای امنیتی را هنگام بالا آمدن سرور در کنسول نشان می‌دهد."""
+    issues = security_issues()
+    if not issues:
+        return
+    print("  " + "─" * 54)
+    print(f"  ⚠️  {len(issues)} مورد امنیتی — برای اجرای محلی اشکالی ندارد،")
+    print("      ولی قبل از باز کردن روی اینترنت حتماً درستشان کنید:")
+    for issue in issues:
+        print(f"      • {issue['text']}")
+    print("      راهنما: DEPLOY.md  |  بررسی: python scripts/preflight.py")
+    print("  " + "─" * 54)
