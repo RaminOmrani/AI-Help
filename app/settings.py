@@ -23,9 +23,11 @@ FIELDS: dict[str, str] = {
     "public_access_mode": config.PUBLIC_ACCESS_MODE,
     # کدهای دسترسی، هر کدام در یک خط. می‌شود برای گروه‌های مختلف کد جدا داد و بعداً حذفشان کرد.
     "public_access_codes": config.PUBLIC_ACCESS_CODES,
+    # کلیدهای سامانه‌های داخلی (سامانه‌ی تیکت)، جدا شده با کاما یا خط جدید
+    "integration_api_keys": ",".join(config.INTEGRATION_API_KEYS),
 }
 
-SECRET_FIELDS = {"avalai_api_key"}
+SECRET_FIELDS = {"avalai_api_key", "integration_api_keys"}
 
 _lock = threading.Lock()
 _cache: dict[str, str] = {}
@@ -113,6 +115,8 @@ def public_view() -> dict:
         "vision_enabled": vision_enabled(),
         "public_access_mode": access_mode(),
         "public_access_codes": get("public_access_codes"),
+        # خودِ کلیدها هرگز به پنل فرستاده نمی‌شوند؛ فقط تعدادشان
+        "integration_keys_count": len(integration_keys()),
     }
 
 
@@ -127,6 +131,25 @@ def access_mode() -> str:
 def access_codes() -> list[str]:
     raw = get("public_access_codes") or ""
     return [line.strip() for line in raw.replace(",", "\n").splitlines() if line.strip()]
+
+
+# ------------------------------------------------------------------
+# اتصال سرور-به-سرور
+# ------------------------------------------------------------------
+def integration_keys() -> list[str]:
+    raw = get("integration_api_keys") or ""
+    return [k.strip() for k in raw.replace(",", "\n").splitlines() if k.strip()]
+
+
+def integration_key_is_valid(candidate: str) -> bool:
+    """آیا این کلید یکی از کلیدهای مجاز است؟ (مقایسه در زمان ثابت)"""
+    from .security import constant_time_equals
+
+    candidate = (candidate or "").strip()
+    if not candidate:
+        return False
+    # هر کلید جداگانه مقایسه می‌شود تا طولِ تطابق لو نرود
+    return any(constant_time_equals(candidate, key) for key in integration_keys())
 
 
 def code_is_valid(candidate: str) -> bool:

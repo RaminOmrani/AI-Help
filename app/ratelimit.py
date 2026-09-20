@@ -95,6 +95,34 @@ def check(request: Request, *, cost: int = 1) -> None:
                 )
 
 
+def check_key(key: str, *, per_minute: int, per_day: int) -> None:
+    """سقف برای یک کلید سرور-به-سرور.
+
+    درخواست‌های سامانه‌ی تیکت همه از یک آی‌پی می‌آیند، پس شمارشِ آی‌پی‌محور
+    یا خیلی زود می‌بندد یا برای بقیه باز می‌ماند. اینجا روی خودِ کلید
+    می‌شماریم تا هر سامانه سقف مستقل خودش را داشته باشد.
+    """
+    if not config.RATE_LIMIT_ENABLED:
+        return
+
+    bucket = f"key:{key}"
+    now = time.time()
+    with _lock:
+        _sweep(now)
+        if not _hit(_minute, bucket, MINUTE, per_minute, now):
+            raise HTTPException(
+                status_code=429,
+                detail="سقف درخواست در دقیقه برای این کلید پر شد.",
+                headers={"Retry-After": "30"},
+            )
+        if not _hit(_day, bucket, DAY, per_day, now):
+            raise HTTPException(
+                status_code=429,
+                detail="سقف درخواست امروز برای این کلید پر شد.",
+                headers={"Retry-After": "3600"},
+            )
+
+
 def snapshot() -> dict:
     """آماری برای پنل مدیریت."""
     with _lock:

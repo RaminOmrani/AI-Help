@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS documents (
     filename      TEXT NOT NULL,
     path          TEXT NOT NULL,
     audience      TEXT NOT NULL DEFAULT 'both',   -- public | internal | both
+    product       TEXT DEFAULT '',                -- اسلاگ محصول؛ خالی یعنی همه‌ی محصول‌ها
     category      TEXT DEFAULT '',
     size_bytes    INTEGER DEFAULT 0,
     pages         INTEGER DEFAULT 0,
@@ -87,6 +88,21 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT
 );
+
+-- تماس‌های سامانه‌ی تیکت. گفتگوی مرورگری نیستند، پس جدول خودشان را دارند
+-- تا آمار و سابقه‌ی صفحه‌ها شلوغ نشود؛ ولی سابقه‌شان برای حسابرسی می‌ماند.
+CREATE TABLE IF NOT EXISTS integration_calls (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    company    TEXT DEFAULT '',
+    product    TEXT DEFAULT '',
+    department TEXT DEFAULT '',
+    user_name  TEXT DEFAULT '',
+    question   TEXT DEFAULT '',
+    answer     TEXT DEFAULT '',
+    grounded   INTEGER DEFAULT 1,
+    latency_ms INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now'))
+);
 """
 
 DEFAULT_SETTINGS = {
@@ -136,12 +152,14 @@ MIGRATIONS = [
     ("conversations", "client_id", "TEXT DEFAULT ''"),
     ("documents", "ai_repair", "INTEGER DEFAULT 1"),
     ("documents", "progress", "TEXT DEFAULT ''"),
+    ("documents", "product", "TEXT DEFAULT ''"),
 ]
 
 
 # ایندکس‌هایی که به ستون‌های افزوده‌شده در مهاجرت وابسته‌اند
 POST_MIGRATION_SCHEMA = """
 CREATE INDEX IF NOT EXISTS idx_conv_client ON conversations(client_id, audience);
+CREATE INDEX IF NOT EXISTS idx_doc_product ON documents(product, audience);
 """
 
 

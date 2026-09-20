@@ -115,6 +115,19 @@ RATE_LIMIT_ENABLED = _env("RATE_LIMIT_ENABLED", "true").lower() in {"1", "true",
 RATE_LIMIT_PER_MINUTE = _env_int("RATE_LIMIT_PER_MINUTE", 10)
 RATE_LIMIT_PER_DAY = _env_int("RATE_LIMIT_PER_DAY", 150)
 
+# ------------------------------------------------------------------
+# اتصال سرور-به-سرور (سامانه‌ی تیکت)
+# ------------------------------------------------------------------
+# یک یا چند کلید، جدا شده با کاما. هر سامانه‌ای کلید خودش را داشته باشد
+# تا بشود بدون قطع کردن بقیه، یکی را باطل کرد.
+INTEGRATION_API_KEYS = [
+    k.strip() for k in _env("INTEGRATION_API_KEYS", "").split(",") if k.strip()
+]
+# سقف جداگانه: همه‌ی درخواست‌ها از یک آی‌پی (سرور تیکت) می‌آیند، پس سقفِ
+# مرورگری اینجا بی‌معناست و شمارش روی خودِ کلید انجام می‌شود.
+INTEGRATION_RATE_PER_MINUTE = _env_int("INTEGRATION_RATE_PER_MINUTE", 60)
+INTEGRATION_RATE_PER_DAY = _env_int("INTEGRATION_RATE_PER_DAY", 3000)
+
 # دسترسی به صفحه‌ی مشتری: open (همه) یا code (فقط با کد دسترسی).
 # از پنل مدیریت هم قابل تغییر است و همان‌جا اولویت دارد.
 PUBLIC_ACCESS_MODE = _env("PUBLIC_ACCESS_MODE", "open")

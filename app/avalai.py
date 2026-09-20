@@ -100,30 +100,35 @@ async def chat_stream(
     url = f"{config.AVALAI_BASE_URL}/chat/completions"
     timeout = httpx.Timeout(config.REQUEST_TIMEOUT, connect=20.0)
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        async with client.stream("POST", url, headers=_headers(), json=payload) as resp:
-            if resp.status_code >= 400:
-                body = (await resp.aread()).decode("utf-8", "replace")
-                raise AvalAIError(_friendly(resp.status_code, body))
-            async for line in resp.aiter_lines():
-                if not line or not line.startswith("data:"):
-                    continue
-                data = line[5:].strip()
-                if data == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(data)
-                except json.JSONDecodeError:
-                    continue
-                choices = chunk.get("choices") or []
-                if not choices:
-                    continue
-                if meta is not None and choices[0].get("finish_reason"):
-                    meta["finish_reason"] = choices[0]["finish_reason"]
-                delta = choices[0].get("delta") or {}
-                piece = delta.get("content")
-                if piece:
-                    yield piece
+    # خطای شبکه وسط استریم هم باید AvalAIError شود تا لایه‌ی بالاتر
+    # پیام خوانا نشان بدهد، نه ردِ پشته.
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            async with client.stream("POST", url, headers=_headers(), json=payload) as resp:
+                if resp.status_code >= 400:
+                    body = (await resp.aread()).decode("utf-8", "replace")
+                    raise AvalAIError(_friendly(resp.status_code, body))
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    choices = chunk.get("choices") or []
+                    if not choices:
+                        continue
+                    if meta is not None and choices[0].get("finish_reason"):
+                        meta["finish_reason"] = choices[0]["finish_reason"]
+                    delta = choices[0].get("delta") or {}
+                    piece = delta.get("content")
+                    if piece:
+                        yield piece
+    except httpx.HTTPError as exc:
+        raise AvalAIError(describe(exc)) from exc
 
 
 async def chat(
@@ -146,14 +151,22 @@ async def chat(
         "max_tokens": max_tokens or config.ANSWER_MAX_TOKENS,
     }
     url = f"{config.AVALAI_BASE_URL}/chat/completions"
-    async with httpx.AsyncClient(timeout=config.REQUEST_TIMEOUT) as client:
-        resp = await client.post(url, headers=_headers(), json=payload)
-        if resp.status_code >= 400:
-            raise AvalAIError(_friendly(resp.status_code, resp.text))
+    # خطای شبکه (قطعی، فیلترینگ، تایم‌اوت) هم باید AvalAIError شود، وگرنه
+    # هر مسیری که این تابع را صدا می‌زند به‌جای پیام خوانا خطای ۵۰۰ می‌دهد.
+    try:
+        async with httpx.AsyncClient(timeout=config.REQUEST_TIMEOUT) as client:
+            resp = await client.post(url, headers=_headers(), json=payload)
+    except httpx.HTTPError as exc:
+        raise AvalAIError(describe(exc)) from exc
+    if resp.status_code >= 400:
+        raise AvalAIError(_friendly(resp.status_code, resp.text))
+    try:
         data = resp.json()
+    except ValueError as exc:
+        raise AvalAIError("پاسخ سرویس قابل خواندن نبود (JSON نبود).") from exc
     try:
         choice = data["choices"][0]
-    except (KeyError, IndexError):
+    except (KeyError, IndexError, TypeError):
         raise AvalAIError("پاسخ نامعتبر از سرویس دریافت شد.")
 
     if meta is not None and choice.get("finish_reason"):

@@ -138,6 +138,9 @@
           <option value="public">فقط مشتریان</option>
           <option value="internal">فقط کارشناسان پشتیبانی</option>
         </select>
+        <span class="muted">محصول:</span>
+        <select class="field" id="product"
+                title="سوال‌هایی که سامانه‌ی تیکت درباره‌ی این محصول می‌فرستد، فقط در همین فایل‌ها جستجو می‌شود."></select>
         <label style="display:flex;align-items:center;gap:6px;cursor:pointer"
                title="صفحه‌های عکس‌دار به مدل بینایی داده می‌شوند تا محتوای اسکرین‌شات‌ها هم قابل جستجو شود. فقط یک‌بار هنگام بارگذاری.">
           <input type="checkbox" id="repair" checked> خواندن متن و تصویرهای فایل با هوش مصنوعی
@@ -149,7 +152,7 @@
       <table>
         <thead>
           <tr>
-            <th>عنوان</th><th>مخاطب</th><th>صفحه</th><th>تکه</th><th>وضعیت</th><th></th>
+            <th>عنوان</th><th>مخاطب</th><th>محصول</th><th>صفحه</th><th>تکه</th><th>وضعیت</th><th></th>
           </tr>
         </thead>
         <tbody id="docs"><tr><td colspan="6" class="muted">در حال بارگذاری…</td></tr></tbody>
@@ -305,6 +308,7 @@ async function boot() {
     await refreshStats();
     login.hidden = true;
     app.hidden = false;
+    await loadProducts();   // قبل از جدول، وگرنه ستون محصول خالی می‌ماند
     loadDocs();
     loadChats('public');
     loadTickets();
@@ -407,6 +411,22 @@ const STATUS = {
   pending:  '<span class="pill">در صف</span>',
 };
 
+/* فهرست محصول‌ها یک بار خوانده می‌شود و در هر ردیف جدول استفاده می‌شود. */
+let PRODUCTS = [{ slug: '', name: 'همه‌ی محصولات' }];
+
+function productOptions(selected) {
+  return PRODUCTS
+    .map((p) => `<option value="${escapeHtml(p.slug)}" ${p.slug === selected ? 'selected' : ''}>${escapeHtml(p.name)}</option>`)
+    .join('');
+}
+
+async function loadProducts() {
+  try {
+    PRODUCTS = (await api('/api/admin/products', { auth: true })).products || PRODUCTS;
+  } catch { /* با فهرست پیش‌فرض ادامه می‌دهیم */ }
+  $('#product').innerHTML = productOptions('');
+}
+
 async function loadDocs() {
   let docs = [];
   try { docs = (await api('/api/admin/documents', { auth: true })).documents; }
@@ -426,6 +446,11 @@ async function loadDocs() {
             ${Object.entries(AUD).map(([v, l]) => `<option value="${v}" ${d.audience === v ? 'selected' : ''}>${l}</option>`).join('')}
           </select>
         </td>
+        <td>
+          <select class="field tiny" data-prod-for="${d.id}" style="padding:5px 9px;font-size:12px">
+            ${productOptions(d.product || '')}
+          </select>
+        </td>
         <td>${faDigits(d.pages || 0)}</td>
         <td>${faDigits(d.chunk_count || 0)}</td>
         <td>
@@ -440,7 +465,7 @@ async function loadDocs() {
           </div>
         </td>
       </tr>`).join('')
-    : '<tr><td colspan="6" class="muted">هنوز فایلی اضافه نشده است.</td></tr>';
+    : '<tr><td colspan="7" class="muted">هنوز فایلی اضافه نشده است.</td></tr>';
 
   $$('[data-re]').forEach((b) => b.addEventListener('click', async () => {
     await api(`/api/admin/documents/${b.dataset.re}/reindex`, { method: 'POST', auth: true });
@@ -458,6 +483,12 @@ async function loadDocs() {
       method: 'PATCH', auth: true, body: { audience: s.value },
     });
     toast('دسترسی به‌روزرسانی شد.', 'ok');
+  }));
+  $$('[data-prod-for]').forEach((s) => s.addEventListener('change', async () => {
+    await api(`/api/admin/documents/${s.dataset.prodFor}`, {
+      method: 'PATCH', auth: true, body: { product: s.value },
+    });
+    toast('محصول به‌روزرسانی شد.', 'ok');
   }));
 
   clearTimeout(pollTimer);
@@ -484,6 +515,7 @@ async function upload(files) {
   const form = new FormData();
   files.forEach((f) => form.append('files', f));
   form.append('audience', $('#audience').value);
+  form.append('product', $('#product').value);
   form.append('ai_repair', $('#repair').checked ? 'true' : 'false');
 
   toast(`در حال بارگذاری ${faDigits(files.length)} فایل…`);

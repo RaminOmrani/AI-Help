@@ -131,6 +131,12 @@ def main() -> int:
             warnings += 1
             print(f"{BAD} {bad}")
 
+    keys = settings.integration_keys()
+    if keys:
+        print(f"{OK} اتصال سامانه‌های داخلی روشن است ({len(keys)} کلید ثبت‌شده)")
+    else:
+        print(f"{INFO} اتصال سامانه‌های داخلی خاموش است (INTEGRATION_API_KEYS خالی) — API.md")
+
     from app import rag
     index = rag.stats()
     if index["ready"]:

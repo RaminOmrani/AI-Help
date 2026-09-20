@@ -9,15 +9,15 @@ import shutil
 import unicodedata
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from . import (
-    avalai, chat_service, config, db, diagnostics, ingest, prompts,
-    rag, ratelimit, security, settings,
+    avalai, chat_service, config, db, diagnostics, ingest, integrations,
+    products, prompts, rag, ratelimit, security, settings,
 )
 
 app = FastAPI(title="Support AI — AvalAI", version="3.0")
@@ -67,6 +67,29 @@ class TicketIn(BaseModel):
     session_id: str = ""
 
 
+async def _json_body(request: Request) -> dict:
+    """بدنه‌ی JSON را می‌خواند و خطای خوانا می‌دهد.
+
+    چون این مسیر خودش بدنه را می‌خواند (نه FastAPI)، باید خطای «JSON نیست»
+    را هم خودمان به ۴۰۰ تبدیل کنیم، وگرنه ۵۰۰ می‌شود.
+    """
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail="بدنه‌ی درخواست JSON معتبر نیست.") from None
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="بدنه‌ی درخواست باید یک شیء JSON باشد.")
+    return body
+
+
+def _parse(model: type[BaseModel], body: dict):
+    """اعتبارسنجی دستی، با پیام ۴۰۰ به‌جای ۵۰۰."""
+    try:
+        return model(**body)
+    except ValidationError as exc:
+        raise HTTPException(status_code=400, detail=exc.errors()[0].get("msg", "ورودی نامعتبر")) from exc
+
+
 class LoginIn(BaseModel):
     role: str
     password: str
@@ -83,6 +106,7 @@ class RewriteIn(BaseModel):
 class DocPatchIn(BaseModel):
     title: str | None = None
     audience: str | None = None
+    product: str | None = None
     category: str | None = None
     ai_repair: bool | None = None
 
@@ -152,11 +176,44 @@ async def unlock(payload: UnlockIn, request: Request):
 
 @app.post("/api/chat")
 async def customer_chat(
-    payload: ChatIn,
     request: Request,
-    _: str = Depends(security.require_visitor),
-    client_id: str = Depends(security.require_client),
+    authorization: str | None = Header(default=None),
+    x_client_key: str | None = Header(default=None),
 ):
+    """دو مصرف‌کننده دارد و از روی هدر Authorization از هم جدا می‌شوند:
+
+    ۱) صفحه‌ی مشتری در مرورگر → پاسخ استریمی (SSE)، با شناسه‌ی امضاشده‌ی مرورگر.
+    ۲) سامانه‌های داخلی مثل سامانه‌ی تیکت → کلید ثابت، پاسخ یک‌جای JSON.
+
+    عمداً روی یک مسیر نشسته‌اند چون سامانه‌ی تیکت همین آدرس را صدا می‌زند؛
+    ولی هیچ‌کدام نمی‌تواند به مسیر دیگری سرک بکشد: کلید سامانه‌ها با
+    SECRET_KEY ساخته نمی‌شود و شناسه‌ی مرورگر هم کلید سامانه نیست.
+    """
+    body = await _json_body(request)
+
+    # بدنه‌ای که «messages» دارد یعنی سامانه‌ی تیکت است، نه مرورگر.
+    # بدون این، کلید غلط به مسیر مرورگر می‌افتاد و به‌جای «کلید نامعتبر»
+    # خطای گیج‌کننده‌ی «فیلد message لازم است» می‌گرفت.
+    if "messages" in body and not integrations.is_integration_request(authorization):
+        raise HTTPException(
+            status_code=401,
+            detail="کلید دسترسی نامعتبر است یا در هدر Authorization فرستاده نشده.",
+        )
+
+    # --- مسیر سرور-به-سرور ---
+    if integrations.is_integration_request(authorization):
+        per_minute, per_day = integrations.limits()
+        ratelimit.check_key(
+            integrations.key_from_header(authorization),
+            per_minute=per_minute,
+            per_day=per_day,
+        )
+        return await integrations.answer(body, key=integrations.key_from_header(authorization))
+
+    # --- مسیر مرورگر ---
+    payload = _parse(ChatIn, body)
+    await security.require_visitor(authorization)
+    client_id = await security.require_client(x_client_key)
     ratelimit.check(request)
     return StreamingResponse(
         chat_service.answer_stream(
@@ -428,7 +485,15 @@ def _schedule_index(doc_id: int) -> None:
 def _doc_row(row) -> dict:
     data = dict(row)
     data["size_mb"] = round((data.get("size_bytes") or 0) / (1024 * 1024), 2)
+    data["product"] = data.get("product") or ""
+    data["product_name"] = products.display(data["product"])
     return data
+
+
+@app.get("/api/admin/products")
+async def list_products(role: str = Depends(security.require_admin)):
+    """محصول‌هایی که می‌شود یک سند را به آن‌ها بست."""
+    return {"products": products.as_options()}
 
 
 @app.get("/api/admin/documents")
@@ -441,12 +506,15 @@ async def list_documents(role: str = Depends(security.require_admin)):
 async def upload_documents(
     files: list[UploadFile] = File(...),
     audience: str = Form("both"),
+    product: str = Form(""),
     category: str = Form(""),
     ai_repair: str = Form("true"),
     role: str = Depends(security.require_admin),
 ):
     if audience not in AUDIENCES:
         raise HTTPException(status_code=400, detail="مخاطب نامعتبر است.")
+    if not products.is_valid(product):
+        raise HTTPException(status_code=400, detail="محصول نامعتبر است.")
 
     results = []
     for upload in files:
@@ -477,13 +545,15 @@ async def upload_documents(
             continue
 
         doc_id = db.execute(
-            "INSERT INTO documents(title, filename, path, audience, category, size_bytes, ai_repair) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO documents"
+            "(title, filename, path, audience, product, category, size_bytes, ai_repair) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 Path(target.name).stem,
                 target.name,
                 str(target),
                 audience,
+                product,
                 category.strip(),
                 size,
                 1 if str(ai_repair).lower() in {"1", "true", "on", "yes"} else 0,
@@ -525,11 +595,14 @@ async def patch_document(
         raise HTTPException(status_code=404, detail="سند پیدا نشد.")
     if payload.audience and payload.audience not in AUDIENCES:
         raise HTTPException(status_code=400, detail="مخاطب نامعتبر است.")
+    if payload.product is not None and not products.is_valid(payload.product):
+        raise HTTPException(status_code=400, detail="محصول نامعتبر است.")
 
     updates, params = [], []
     for field_name, value in (
         ("title", payload.title),
         ("audience", payload.audience),
+        ("product", payload.product),
         ("category", payload.category),
     ):
         if value is not None:

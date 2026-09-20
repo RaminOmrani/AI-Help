@@ -24,7 +24,9 @@ os.environ['DATA_DIR'] = str(WORK)
 os.environ['DOCS_DIR'] = str(WORK / 'docs')
 os.environ['AVALAI_API_KEY'] = 'aa-fake-key-for-testing'
 
-from app import avalai, config, db, rag, chat_service, repair, vision  # noqa: E402
+from app import (  # noqa: E402
+    avalai, chat_service, config, db, integrations, products, rag, repair, settings, vision,
+)
 
 calls = {"chat": 0, "embed": 0, "stream": 0, "vision": 0, "image_bytes": [], "max_tokens": None}
 
@@ -81,6 +83,115 @@ repair.avalai.chat = fake_chat
 vision.avalai.chat = fake_chat
 rag.avalai.embed = fake_embed
 chat_service.avalai.chat_stream = fake_stream
+integrations.avalai.chat = fake_chat
+
+
+async def check_integration() -> bool:
+    """سوالِ هر محصول فقط از راهنمای خودش جواب بگیرد."""
+    passed = True
+
+    menu = str(WORK / 'menu.txt')
+    shop = str(WORK / 'shop.txt')
+    common = str(WORK / 'common.txt')
+    open(menu, 'w', encoding='utf-8').write(
+        "چطور منوی دیجیتال رستوران را بسازم؟\nاز بخش مدیریت منو، دکمه‌ی افزودن دسته را بزنید.\n" * 4)
+    open(shop, 'w', encoding='utf-8').write(
+        "چطور محصول فروشگاه را منتشر کنم؟\nاز بخش محصولات، دکمه‌ی انتشار را بزنید.\n" * 4)
+    open(common, 'w', encoding='utf-8').write(
+        "برای تغییر رمز عبور حساب کاربری، از تنظیمات پروفایل اقدام کنید.\n" * 4)
+
+    ids = {}
+    for slug, title, path in (
+        ("menuclub", "راهنمای منوکلاب", menu),
+        ("shop-mojahaz", "راهنمای شاپ مجهز", shop),
+        ("", "راهنمای مشترک", common),
+    ):
+        ids[slug] = db.execute(
+            "INSERT INTO documents(title, filename, path, audience, product, size_bytes) "
+            "VALUES (?,?,?,?,?,?)",
+            (title, Path(path).name, path, "both", slug, os.path.getsize(path)))
+        await rag.index_document(ids[slug])
+
+    # جستجوی محدود به یک محصول نباید سند محصول دیگر را برگرداند
+    hits = await rag.search("چطور محصول را منتشر کنم؟", audience="public", product="menuclub")
+    if any(h.doc_id == ids["shop-mojahaz"] for h in hits):
+        print("❌ راهنمای شاپ مجهز در جستجوی منوکلاب ظاهر شد!"); passed = False
+    else:
+        print("✅ جستجوی هر محصول فقط در راهنمای خودش انجام می‌شود")
+
+    # سند «همه‌ی محصولات» باید برای هر محصولی دیده شود
+    shared = await rag.search("تغییر رمز عبور حساب کاربری", audience="public", product="menuclub")
+    assert any(h.doc_id == ids[""] for h in shared), "سند مشترک برای محصول دیده نشد"
+    print("✅ سند «همه‌ی محصولات» برای هر محصولی در دسترس است")
+
+    # نام شرکت و اسلاگ هر دو باید به یک محصول برسند
+    assert products.resolve("menuclub").slug == "menuclub"
+    assert products.resolve(None, "منوکلاب").slug == "menuclub"
+    assert products.resolve("CRM میلیونر").slug == "milionar-crm"
+    assert products.resolve("شرکت ناشناس") is None
+    print("✅ تشخیص محصول از روی نام و اسلاگ کار می‌کند")
+
+    # پاسخ کامل اندپوینت
+    result = await integrations.answer({
+        "messages": [
+            {"role": "user", "content": "سلام"},
+            {"role": "assistant", "content": "سلام، بفرمایید"},
+            {"role": "user", "content": "چطور منوی دیجیتال بسازم؟"},
+        ],
+        "metadata": {
+            "company": "منوکلاب", "company_slug": "menuclub",
+            "department": "پشتیبانی فنی", "user_name": "رامین",
+        },
+    }, key="test")
+    assert result["reply"], "پاسخ خالی برگشت"
+    assert result["matched_product"] == "menuclub", result["matched_product"]
+    print(f"✅ اندپوینت سامانه‌ی تیکت پاسخ داد (محصول: {result['matched_product']})")
+
+    logged = db.query_one(
+        "SELECT company, product, department, user_name FROM integration_calls ORDER BY id DESC LIMIT 1")
+    assert logged["product"] == "menuclub" and logged["department"] == "پشتیبانی فنی", dict(logged)
+    print("✅ تماس سامانه در جدول حسابرسی ثبت شد")
+
+    # شرکت ناشناس نباید درخواست را بشکند، فقط محدودیت محصول برداشته می‌شود
+    unknown = await integrations.answer({
+        "messages": [{"role": "user", "content": "چطور رمز را عوض کنم؟"}],
+        "metadata": {"company": "شرکت ناشناس"},
+    }, key="test")
+    assert unknown["matched_product"] == "", unknown["matched_product"]
+    print("✅ شرکت ناشناس خطا نمی‌دهد و روی همه‌ی محصول‌ها جستجو می‌کند")
+
+    # ورودی‌های بد باید ۴۰۰ بدهند، نه ۵۰۰
+    from fastapi import HTTPException
+    for bad, label in (
+        ({"messages": []}, "messages خالی"),
+        ({"messages": [{"role": "assistant", "content": "x"}]}, "آخرین پیام از assistant"),
+        ({"messages": "نه آرایه"}, "messages آرایه نیست"),
+        ({"messages": [{"role": "user", "content": "x"}], "metadata": "نه شیء"}, "metadata شیء نیست"),
+    ):
+        try:
+            await integrations.answer(bad, key="test")
+        except HTTPException as exc:
+            assert exc.status_code == 400, f"{label}: {exc.status_code}"
+        else:
+            print(f"❌ ورودی بد پذیرفته شد: {label}"); passed = False
+    print("✅ ورودی‌های نامعتبر با خطای ۴۰۰ رد می‌شوند")
+
+    # کلید نامعتبر نباید بپذیرد
+    os.environ["INTEGRATION_API_KEYS"] = ""
+    settings.invalidate()
+    assert not settings.integration_key_is_valid("anything")
+    assert not integrations.is_integration_request("Bearer anything")
+    settings.save({"integration_api_keys": "mil_key_one,mil_key_two"})
+    assert integrations.is_integration_request("Bearer mil_key_one")
+    assert integrations.is_integration_request("Bearer mil_key_two")
+    assert not integrations.is_integration_request("Bearer mil_key_thr")
+    assert not integrations.is_integration_request("mil_key_one")   # بدون Bearer
+    print("✅ فقط کلیدهای ثبت‌شده پذیرفته می‌شوند")
+
+    for doc_id in ids.values():
+        db.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+    rag.invalidate() if hasattr(rag, "invalidate") else None
+    return passed
 
 
 async def main():
@@ -189,6 +300,9 @@ async def main():
     left = chat_service.conversation_messages("s1", "public", "client-a")
     assert len(left) == 2, f"بعد از عقب بردن باید ۲ پیام بماند، ماند {len(left)}"
     print("✅ عقب بردن گفتگو، سوال و پاسخ بعدش را پاک می‌کند")
+
+    # ---- تفکیک محصول‌ها و اندپوینت سامانه‌ی تیکت ----
+    ok = await check_integration() and ok
 
     # ---- بازسازی متن ----
     broken = "چجور ی کاالها ی داخل سرور رو ببر می داخل س ی ستم نت ی کال صندوق سواالت " * 4

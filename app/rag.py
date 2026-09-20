@@ -193,7 +193,7 @@ def _load() -> tuple[list[dict], np.ndarray | None, Counter]:
     raw = db.query(
         """
         SELECT c.id, c.doc_id, c.page, c.text, c.norm, c.embedding,
-               d.title, d.filename, d.audience, d.category
+               d.title, d.filename, d.audience, d.category, d.product
         FROM chunks c JOIN documents d ON d.id = c.doc_id
         WHERE d.status = 'ready'
         ORDER BY c.id
@@ -217,6 +217,7 @@ def _load() -> tuple[list[dict], np.ndarray | None, Counter]:
                 "filename": r["filename"],
                 "audience": r["audience"],
                 "category": r["category"],
+                "product": r["product"] or "",
                 "tokens": Counter(toks),
                 "length": max(len(toks), 1),
             }
@@ -306,8 +307,14 @@ async def search(
     *,
     audience: str = "internal",
     top_k: int | None = None,
+    product: str | None = None,
 ) -> list[Hit]:
-    """بازیابی ترکیبی: امتیاز معنایی + امتیاز کلیدواژه‌ای."""
+    """بازیابی ترکیبی: امتیاز معنایی + امتیاز کلیدواژه‌ای.
+
+    اگر `product` داده شود، فقط سندهای همان محصول به‌علاوه‌ی سندهای
+    «همه‌ی محصولات» (product خالی) جستجو می‌شوند. None یعنی محدودیتی
+    در کار نیست و همه‌ی محصول‌ها دیده می‌شوند.
+    """
     rows, matrix, df = _load()
     if not rows:
         return []
@@ -316,6 +323,8 @@ async def search(
     top_k = top_k or (config.TOP_K + 4 if audience == "internal" else config.TOP_K)
     allowed = {"both", audience}
     mask = np.array([r["audience"] in allowed for r in rows], dtype=bool)
+    if product:
+        mask &= np.array([r.get("product", "") in ("", product) for r in rows], dtype=bool)
     if not mask.any():
         return []
 
